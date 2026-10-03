@@ -296,6 +296,10 @@ For a faster device-only rerun after configuring the environment:
 .\gradlew.bat :app:connectedDebugAndroidTest --console=plain
 ```
 
+### Explore with fictional data
+
+Run `./scripts/install-demo.ps1` to build and install **YardMoney Demo**, a separate copy with six months of fictional records. Your normal YardMoney database stays separate. The fixture includes 434 transactions, receipts, goals, bills and shopping lists. See [demo installation](docs/18-demo-data.md) for setup, repeat runs and reset instructions.
+
 ### Evidence and reports
 
 The latest full run passed 73 host tests and 38 device tests on a Pixel 8 Pro, with no skipped device tests. Receipt regression coverage checks ambiguous uniform images as well as a recognizable paper quadrilateral. UI tests cover forms, calendar behavior, category selection and appearance; repository tests use isolated databases for ledger invariants.

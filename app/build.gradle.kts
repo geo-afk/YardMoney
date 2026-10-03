@@ -3,16 +3,18 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
 }
+val demoInstall = providers.gradleProperty("demoInstall").orNull == "true"
 android {
     namespace = "jm.yardmoney"
     compileSdk = 36
     defaultConfig {
-        applicationId = "jm.yardmoney"
+        applicationId = if (demoInstall) "jm.yardmoney.demo" else "jm.yardmoney"
+        manifestPlaceholders["appLabel"] = if (demoInstall) "YardMoney Demo" else "@string/app_name"
         minSdk = 26
         targetSdk = 36
         versionCode = 10
         versionName = "0.3.6"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = if (demoInstall) "jm.yardmoney.demo.DemoDataInstaller" else "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
