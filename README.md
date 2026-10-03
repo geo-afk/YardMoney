@@ -2,7 +2,7 @@
 
 **Understand your money before payday.** YardMoney is an Android budgeting app for managing Jamaican dollars, everyday spending, bills, savings and receipts in one place.
 
-The current **0.3.4 local pilot** stores financial records on your device and works without an account. It uses a green Material interface with adjustable themes, spacing, corners and motion. Optional accounts and cloud backup are planned for the first public release; they are not implemented in this pilot.
+The current **0.3.5 local pilot** stores financial records on your device and works without an account. It uses a green Material interface with adjustable themes, spacing, corners and motion. Optional accounts and cloud backup are planned for the first public release; they are not implemented in this pilot.
 
 [User guide](#using-yardmoney) · [Developer setup](#developer-setup) · [Testing](#testing-and-verification) · [Architecture](#architecture-and-source-map) · [Issues](https://github.com/geo-afk/YardMoney/issues) · [MIT license](LICENSE)
 
@@ -29,13 +29,13 @@ The current **0.3.4 local pilot** stores financial records on your device and wo
 
 | Item | Current state |
 | --- | --- |
-| Version | 0.3.4, Android version code 8 |
+| Version | 0.3.5, Android version code 9 |
 | Availability | Development pilot; no production store release configured |
 | Currency | Jamaican dollars (JMD), displayed as J$ where applicable |
 | Android support | Android 8.0 / API 26 minimum; compile and target API 36 |
 | Accounts and connectivity | Local use without sign-in; optional identity and cloud backup remain planned |
-| Latest host verification | 67 tests passed |
-| Latest device verification | 34 instrumentation tests passed on a Pixel 8 Pro |
+| Latest host verification | 72 tests passed |
+| Latest device verification | 38 instrumentation tests passed on a Pixel 8 Pro |
 | Build checks | Debug, instrumentation APK and optimized unsigned release builds passed |
 | Android lint | Zero errors and 34 warnings in the latest full verification |
 | License | MIT; copyright 2026 Geovanni Stewart |
@@ -73,7 +73,7 @@ This pilot is a manual financial tracker. It does not connect to banks, move mon
 
 ### Interface details
 
-The app uses Material calendar date selection, dollar prefixes and grouped currency input, themed navigation, anchored dropdowns, expandable settings and a scrollable money-entry sheet. Home and Plan allocation charts use donuts with readable category legends and exact monetary values.
+The app uses Material calendar date selection, dollar prefixes and grouped currency input, themed navigation, anchored dropdowns, expandable settings and a scrollable money-entry sheet. Home and Plan donuts compare live category usage with allocated targets, showing used / allocated values, remaining amounts and explicit over-target figures. Their solid portions update as records change.
 
 The money-entry form scrolls independently of its sheet. Returning to the top keeps it open; a new deliberate downward pull at the top closes it. The fixed Save action remains reachable with the keyboard open.
 
@@ -111,7 +111,7 @@ A starting balance records money already held. Income records money newly receiv
 
 The default allocation divides recorded income into 50% needs, 30% wants and 20% savings. For example, J$82,000 of received income allocates J$41,000 to needs, J$24,600 to wants and J$16,400 to savings.
 
-You can change the percentages. They must total exactly 100%; the rebalance preview helps you review the result. Category targets describe your plan, while category activity shows what you recorded. An allocation is not a bank transfer or an automatic savings deposit.
+You can change the percentages. They must total exactly 100%; the rebalance preview helps you review the result. Category targets describe your plan, while category activity shows what you recorded. An allocation is not a bank transfer or an automatic savings deposit. Savings usage includes category spending plus net transfers into SAVINGS-type accounts for the current period; withdrawals reduce the funding measure. Ordinary transfers remain excluded from expenses.
 
 ### Safe to spend and daily guidance
 
@@ -136,6 +136,8 @@ Enter the amount, account and date, then review optional details before saving. 
 ### Bills, commitments and savings goals
 
 Add recurring bills and reserve money for upcoming obligations. Partial payments reduce the outstanding commitment as well as the relevant account balance. Review the remaining amount rather than treating a partially paid bill as settled.
+
+Recurring bills appear once with the next unpaid date; expand other scheduled dates to review or pay individual occurrences. Repeated saves of one reservation request are protected against duplicate insertion.
 
 Savings reservations earmark money still held in a spendable account. Moving that money into a protected savings account should not reserve it a second time. Track contributions and withdrawals against goals to keep goal progress aligned with your recorded movements.
 
@@ -296,7 +298,7 @@ For a faster device-only rerun after configuring the environment:
 
 ### Evidence and reports
 
-The latest full run passed 67 host tests and 34 device tests on a Pixel 8 Pro, with no skipped device tests. Receipt regression coverage checks ambiguous uniform images as well as a recognizable paper quadrilateral. UI tests cover forms, calendar behavior, category selection and appearance; repository tests use isolated databases for ledger invariants.
+The latest full run passed 72 host tests and 38 device tests on a Pixel 8 Pro, with no skipped device tests. Receipt regression coverage checks ambiguous uniform images as well as a recognizable paper quadrilateral. UI tests cover forms, calendar behavior, category selection and appearance; repository tests use isolated databases for ledger invariants.
 
 | Report | Generated location |
 | --- | --- |
@@ -424,7 +426,8 @@ There are no committed release dates in this repository. Bank integrations, adva
 | [Forms and controls](docs/11-forms-controls-allocation.md) | Scrollable entry sheet and dropdown behavior |
 | [Merged Plan](docs/12-merged-plan-navigation.md) | Budget presentation and selection cues |
 | [Donut and navigation](docs/13-donut-immediate-navigation.md) | Current chart and immediate-menu updates |
-| [Activity and scrolling](docs/15-activity-entry-scroll.md) | Current chart filters, gesture behavior and 0.3.4 verification |
+| [Live budget and bills](docs/16-live-budget-reservations.md) | Current used-versus-allocated charts, recurring groups and retry protection |
+| [Activity and scrolling](docs/15-activity-entry-scroll.md) | Current chart filters, gesture behavior and 0.3.5 verification |
 | [Testing setup and fixes](docs/14-testing-environment.md) | Latest device-test evidence and Windows setup |
 | [Prototype review](design/REVIEW.md) | Browser design review, distinct from Android verification |
 

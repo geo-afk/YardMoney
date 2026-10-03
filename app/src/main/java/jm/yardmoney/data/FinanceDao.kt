@@ -58,6 +58,8 @@ interface FinanceDao {
 
     @Upsert suspend fun put(limit: CategoryLimit)
 
+    @Query("SELECT * FROM entries") suspend fun readEntries(): List<AccountEntry>
+
     @Insert suspend fun insertEntries(entries: List<AccountEntry>)
 
     @Insert suspend fun insertSplits(splits: List<TransactionSplit>)
@@ -84,6 +86,9 @@ interface FinanceDao {
 
     @Query("SELECT * FROM bill_templates WHERE active=1")
     suspend fun templates(): List<BillTemplate>
+
+    @Query("SELECT * FROM bill_templates WHERE id=:id")
+    suspend fun template(id: String): BillTemplate?
 
     @Insert suspend fun insert(template: BillTemplate)
 

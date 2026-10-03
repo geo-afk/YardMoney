@@ -31,6 +31,7 @@ data class FinanceSnapshot(
     val shopping: ShoppingState,
     val splits: List<TransactionSplit>,
     val limits: List<CategoryLimit>,
+    val accountEntries: List<AccountEntry> = emptyList(),
 )
 
 data class TransactionInput(
@@ -118,6 +119,7 @@ class FinanceRepository(private val db: YardDatabase) {
                         ShoppingState(dao.readLists(), dao.readShoppingItems()),
                         dao.readSplits(),
                         dao.readCategoryLimits(),
+                        dao.readEntries(),
                     )
                 }
             }
@@ -300,14 +302,18 @@ class FinanceRepository(private val db: YardDatabase) {
         dueDate: LocalDate?,
         goalId: String? = null,
         frequency: String = "ONCE",
+        submissionKey: String = id(),
     ) = db.withTransaction {
+        require(submissionKey.isNotBlank() && submissionKey.length <= 120)
+        if (dao.commitment(submissionKey) != null || dao.template(submissionKey) != null)
+            return@withTransaction
         require(name.isNotBlank() && amount in 1..Money.MAX_MINOR)
         require(kind in setOf("BILL", "SAVINGS", "DEBT", "RESERVE"))
         if (frequency == "ONCE")
             dao.insert(
                 Commitment(
-                    id(),
-                    id(),
+                    submissionKey,
+                    submissionKey,
                     name.trim().take(120),
                     kind,
                     amount,
@@ -322,7 +328,7 @@ class FinanceRepository(private val db: YardDatabase) {
             require(frequency in setOf("WEEKLY", "FORTNIGHTLY", "MONTHLY"))
             dao.insert(
                 BillTemplate(
-                    id(),
+                    submissionKey,
                     name.trim().take(120),
                     kind,
                     amount,

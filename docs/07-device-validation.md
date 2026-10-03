@@ -1,6 +1,6 @@
-# Native validation checklist — pilot 0.3.4
+# Native validation checklist — pilot 0.3.5
 
-Status on 2 October 2026: the fixed instrumentation suite passed all 34 tests on the connected Pixel 8 Pro. See [current update and verification](15-activity-entry-scroll.md) and [testing setup](14-testing-environment.md). The manual checks below are **instructions to perform**, not passed results.
+Status on 2 October 2026: the fixed instrumentation suite passed all 38 tests on the connected Pixel 8 Pro. See [current update and verification](16-live-budget-reservations.md) and [testing setup](14-testing-environment.md). The manual checks below are **instructions to perform**, not passed results.
 
 Use a fresh test profile with fictional data. Instrumented tests use isolated databases; the manual steps alter your app's test records. Keep an encrypted backup if your installation already holds real data.
 
@@ -114,3 +114,10 @@ Optional identity/cloud backup, key recovery, provider/data-location/cost review
 - Switch Expenses, Income, Transfers, Refunds and Adjustments. Chart, exact total, count and list must show the same type/range. Transfers count once; refunds do not mingle with expenses; adjustment signs and zero-net intervals remain meaningful.
 - Check pay-period, last-six-month and all-recorded-date ranges, zero intervals, no records, future-dated records, large amounts and interval boundaries. Tap columns and compare exact figures to entries.
 - Test compact width, 200% fonts, landscape, TalkBack, all themes and gesture/three-button navigation. Chart columns stay reachable with at least 48dp touch width.
+## Update 0.3.5 live budget and recurring bills
+
+- On Home and Plan, record received income and compare each allocation with the selected percentages. Add an expense: the correct category's solid portion and used amount change immediately. Refund/delete an entry and confirm the target is unchanged while usage/remaining refresh.
+- Test no income, zero shares, overspending, refund-only periods, different pay periods and large amounts. Used / allocated and Over by text must remain readable in all themes and at large font scales.
+- Transfer into a SAVINGS-type account and back out: Savings funding changes by the net movement. Transfers between savings accounts net to zero; ordinary account transfers do not become spending. Check both the category summary and primary ring agree.
+- Add a weekly/monthly bill once: Plan and Home show one next occurrence for that series. Expand other dates, pay partially/fully and check that the next unpaid occurrence becomes primary without losing history. Inspect dates before paying.
+- Retry a reservation save and confirm it is not duplicated. Two intentionally separate same-name reservations must remain distinct. Check existing recurring installments, paid histories, editing/removal and safe-to-spend calculations remain intact.

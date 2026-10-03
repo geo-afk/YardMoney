@@ -404,7 +404,8 @@ private fun MainPages(
                                 }
                             }
                             Text("Coming up", style = MaterialTheme.typography.titleLarge)
-                            data.ledger.commitments
+                            reservationGroups(data.ledger.commitments)
+                                .map { it.primary }
                                 .filter { it.remainingMinor > 0 }
                                 .take(4)
                                 .forEach { c ->
@@ -559,27 +560,15 @@ private fun MainPages(
                             ) {
                                 Text("Add bill or reservation")
                             }
-                            data.ledger.commitments.forEach { c ->
-                                Record(
-                                    c.commitment.name,
-                                    "${c.commitment.dueDate?:"No date"} · ${if(c.remainingMinor==0L)"Paid" else "Reserved"}",
-                                    Money.format(c.remainingMinor),
-                                ) {
-                                    if (c.remainingMinor > 0) {
-                                        payCommitId = c.commitment.id
-                                        txKind =
-                                            if (c.commitment.kind == "SAVINGS") "TRANSFER"
-                                            else "EXPENSE"
-                                        form = "transaction"
-                                    }
-                                }
-                                TextButton(
-                                    onClick = { form = "editCommit:${c.commitment.id}" },
-                                    shape = MaterialTheme.shapes.small,
-                                ) {
-                                    Text("Edit reservation")
-                                }
-                            }
+                            ReservationList(
+                                data.ledger.commitments,
+                                pay = { c ->
+                                    payCommitId = c.id
+                                    txKind = if (c.kind == "SAVINGS") "TRANSFER" else "EXPENSE"
+                                    form = "transaction"
+                                },
+                                edit = { c -> form = "editCommit:${c.id}" },
+                            )
                             Text("Savings goals", style = MaterialTheme.typography.titleLarge)
                             OutlinedButton(
                                 onClick = { form = "goal" },
@@ -721,7 +710,8 @@ private fun MainPages(
                     model.repo.addGoal(v[0], Money.positive(v[1]), Money.parse(v[2]))
                 }
             }
-        "commitment" ->
+        "commitment" -> {
+            val reservationKey = rememberSaveable { FinanceRepository.id() }
             SimpleForm(
                 "Reserve money",
                 listOf("Name", "Amount (J$)", "Due date (YYYY-MM-DD; blank = protect now)"),
@@ -741,9 +731,11 @@ private fun MainPages(
                         Money.positive(v[1]),
                         v[2].takeIf { it.isNotBlank() }?.let(LocalDate::parse),
                         frequency = c[1],
+                        submissionKey = reservationKey,
                     )
                 }
             }
+        }
         "split" -> BudgetForm(model, data.ledger.profile!!, busy, close)
         "payday" ->
             SimpleForm(

@@ -312,6 +312,37 @@ class RepositoryTest {
     }
 
     @Test
+    fun reservationRetriesWithSameSubmissionKeySaveOnlyOnce() = runBlocking {
+        repeat(2) {
+            repo.addCommitment("Power", "BILL", 10000, repo.today, submissionKey = "one-bill")
+        }
+        assertEquals(1, repo.snapshot.first().ledger.commitments.size)
+        assertEquals("one-bill", repo.snapshot.first().ledger.commitments.single().commitment.id)
+    }
+
+    @Test
+    fun recurringReservationRetriesDoNotCreateASecondSeries() = runBlocking {
+        repeat(2) {
+            repo.addCommitment(
+                "Rent",
+                "BILL",
+                10000,
+                repo.today,
+                frequency = "MONTHLY",
+                submissionKey = "recurring-bill",
+            )
+        }
+        assertEquals(1, repo.dao.templates().size)
+        val first = repo.snapshot.first().ledger.commitments
+        assertTrue(first.size >= 2)
+        repo.materializeBills()
+        assertEquals(
+            first.map { it.commitment.id },
+            repo.snapshot.first().ledger.commitments.map { it.commitment.id },
+        )
+    }
+
+    @Test
     fun recurrenceMaterializationIsIdempotent() = runBlocking {
         repo.addCommitment("Rent", "BILL", 10000, repo.today, frequency = "MONTHLY")
         val first = repo.snapshot.first().ledger.commitments.size

@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.sp
 import jm.yardmoney.core.*
 
 @Composable
-internal fun AllocationDonut(shares: List<Int>, amounts: List<Long>) {
+internal fun AllocationDonut(shares: List<Int>, amounts: List<Long>, used: List<Long>) {
     val labels = listOf("Needs", "Wants", "Savings")
     val colors =
         listOf(
@@ -35,15 +35,22 @@ internal fun AllocationDonut(shares: List<Int>, amounts: List<Long>) {
     val labelSize = with(density) { 14.sp.toPx() }
     val outerLabels = density.fontScale <= 1.3f && shares.none { it in 1..799 }
     val description =
-        "Budget allocation. " +
+        "Budget usage versus allocation. " +
             labels.indices.joinToString(". ") {
                 labels[it] +
                     " " +
                     InputFormat.percent(shares[it]) +
                     ", " +
+                    Money.format(used[it]) +
+                    " used of " +
                     Money.format(amounts[it])
             }
     val motion = LocalMotion.current
+    val usageRatios =
+        amounts.indices.map { i ->
+            if (amounts[i] > 0) (used[i].toDouble() / amounts[i]).toFloat().coerceIn(0f, 1f)
+            else if (used[i] > 0) 1f else 0f
+        }
     var appeared by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { appeared = true }
     val reveal by
@@ -52,6 +59,15 @@ internal fun AllocationDonut(shares: List<Int>, amounts: List<Long>) {
             animationSpec = motion.floatSpec(),
             label = "Allocation donut",
         )
+    val shownUsage = usageRatios.mapIndexed { i, value ->
+        val animated by
+            animateFloatAsState(
+                value,
+                animationSpec = motion.floatSpec(),
+                label = "Category usage $i",
+            )
+        animated
+    }
     Box(Modifier.fillMaxWidth().height(236.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize().semantics { contentDescription = description }) {
             val stroke = 24.dp.toPx()
@@ -77,7 +93,7 @@ internal fun AllocationDonut(shares: List<Int>, amounts: List<Long>) {
                 if (sweep > 0) {
                     val gap = minOf(3f, sweep * .12f)
                     drawArc(
-                        colors[i],
+                        colors[i].copy(alpha = .18f),
                         start + gap / 2,
                         (sweep - gap) * reveal,
                         false,
@@ -85,6 +101,16 @@ internal fun AllocationDonut(shares: List<Int>, amounts: List<Long>) {
                         dimensions,
                         style = Stroke(stroke),
                     )
+                    if (shownUsage[i] > 0)
+                        drawArc(
+                            colors[i],
+                            start + gap / 2,
+                            (sweep - gap) * shownUsage[i] * reveal,
+                            false,
+                            pos,
+                            dimensions,
+                            style = Stroke(stroke),
+                        )
                     if (outerLabels) {
                         val angle = Math.toRadians((start + sweep / 2).toDouble())
                         val r = radius + 27.dp.toPx()
@@ -101,7 +127,8 @@ internal fun AllocationDonut(shares: List<Int>, amounts: List<Long>) {
             }
         }
         Text(
-            "Budget\nplan",
+            "Used\n" + Money.format(Money.sum(used)).replace(",", ",\u200B"),
+            modifier = Modifier.widthIn(max = 104.dp),
             style = MaterialTheme.typography.labelLarge,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
@@ -123,14 +150,26 @@ internal fun AllocationDonut(shares: List<Int>, amounts: List<Long>) {
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
-                    Money.format(amounts[i]).replace(",", ",\u200B"),
+                    (Money.format(used[i]) + " / " + Money.format(amounts[i])).replace(
+                        ",",
+                        ",\u200B",
+                    ),
                     style = MaterialTheme.typography.titleSmall,
+                )
+                val remaining = amounts[i] - used[i]
+                Text(
+                    if (remaining < 0) "Over by " + Money.format(-remaining)
+                    else "Remaining " + Money.format(remaining),
+                    style = MaterialTheme.typography.bodySmall,
+                    color =
+                        if (remaining < 0) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
     }
     Text(
-        "Budget targets from received income. Recorded spending is shown separately below.",
+        "Solid color shows used money; lighter color shows the remaining allocation. Values are used / allocated. Savings includes net transfers to savings accounts.",
         style = MaterialTheme.typography.bodySmall,
     )
 }

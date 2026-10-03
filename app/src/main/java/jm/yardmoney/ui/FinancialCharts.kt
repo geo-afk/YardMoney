@@ -50,10 +50,10 @@ internal fun BudgetOverview(
         data.ledger.transactions.filter {
             it.date >= profile.periodStart && it.date <= today.toString()
         }
-    val income = Money.sum(current.filter { it.kind == "INCOME" }.map { it.amountMinor })
+    val usage = budgetUsage(data, today)
+    val income = usage.income
     val shares = listOf(profile.needsBp, profile.wantsBp, profile.savingsBp)
-    val allocation =
-        BudgetSplit(profile.needsBp, profile.wantsBp, profile.savingsBp).allocate(income)
+    val allocation = usage.allocation
     val colors = chartColors()
     val labels = listOf("Needs", "Wants", "Savings")
     val motion = LocalMotion.current
@@ -74,7 +74,7 @@ internal fun BudgetOverview(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             val track = MaterialTheme.colorScheme.surfaceContainerHighest
-            AllocationDonut(shares, allocation)
+            AllocationDonut(shares, allocation, usage.used)
             if (onChangeSplit != null)
                 OutlinedButton(onClick = onChangeSplit, shape = MaterialTheme.shapes.small) {
                     Text("Change percentages")
@@ -112,10 +112,13 @@ internal fun BudgetOverview(
                         current,
                         listOf("NEEDS", "WANTS", "SAVINGS")[index],
                     )
-                val used = Money.sum(categories.map { it.second })
+                val used = usage.used[index]
                 val remaining = allocation[index] - used
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AmountRow("Spending less refunds", used)
+                    AmountRow(
+                        if (index == 2) "Spent and net saved" else "Spending less refunds",
+                        used,
+                    )
                     AmountRow(
                         if (remaining < 0) "Over target" else "Remaining target",
                         if (remaining < 0) -remaining else remaining,
