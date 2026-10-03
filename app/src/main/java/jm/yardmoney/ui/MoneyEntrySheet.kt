@@ -1,5 +1,7 @@
 package jm.yardmoney.ui
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -9,6 +11,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.*
+import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -22,11 +30,46 @@ internal fun MoneyEntrySheet(
     close: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val latestBusy by rememberUpdatedState(busy)
     val state =
-        rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { !busy })
+        rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
+            confirmValueChange = { !latestBusy },
+        )
+    val scroll = rememberScrollState()
+    val latestClose by rememberUpdatedState(close)
+    val pullThreshold = with(LocalDensity.current) { 120.dp.toPx() }
+    val gate = remember(pullThreshold) { FormDismissGate(pullThreshold) }
+    val scrollConnection =
+        remember(scroll, gate) {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (scroll.value == 0 && available.y > 0f) {
+                        if (source == NestedScrollSource.UserInput && !latestBusy)
+                            gate.pull(available.y)
+                        return Offset(0f, available.y)
+                    }
+                    if (source == NestedScrollSource.UserInput && available.y < 0f)
+                        gate.pull(available.y)
+                    return Offset.Zero
+                }
+
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset = Offset(0f, available.y)
+
+                override suspend fun onPostFling(
+                    consumed: Velocity,
+                    available: Velocity,
+                ): Velocity = available
+            }
+        }
     ModalBottomSheet(
         onDismissRequest = { if (!busy) close() },
         sheetState = state,
+        sheetGesturesEnabled = false,
         sheetMaxWidth = 640.dp,
         dragHandle = null,
         shape = MaterialTheme.shapes.extraLarge,
@@ -40,7 +83,7 @@ internal fun MoneyEntrySheet(
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(title, style = MaterialTheme.typography.headlineSmall)
                     Text(
-                        "Keep your balances up to date.",
+                        "Scroll to the top, then pull down again to close.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -53,7 +96,22 @@ internal fun MoneyEntrySheet(
             Column(
                 Modifier.weight(1f)
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
+                    .testTag("money-entry-scroll")
+                    .pointerInput(scroll, gate) {
+                        awaitEachGesture {
+                            awaitFirstDown(
+                                requireUnconsumed = false,
+                                pass = PointerEventPass.Initial,
+                            )
+                            gate.begin(scroll.value == 0 && !latestBusy)
+                            do {
+                                val event = awaitPointerEvent(PointerEventPass.Final)
+                            } while (event.changes.any { it.pressed })
+                            if (gate.finish() && !latestBusy) latestClose()
+                        }
+                    }
+                    .nestedScroll(scrollConnection)
+                    .verticalScroll(scroll, overscrollEffect = null)
                     .padding(horizontal = 24.dp, vertical = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(LocalLayoutSpacing.current),
                 content = content,

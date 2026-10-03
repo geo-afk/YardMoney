@@ -1,6 +1,6 @@
-# Native validation checklist — pilot 0.3.3
+# Native validation checklist — pilot 0.3.4
 
-Status on 2 October 2026: the fixed instrumentation suite passed all 31 tests on the connected Pixel 8 Pro. See [testing setup and fixes](14-testing-environment.md). The manual checks below are **instructions to perform**, not passed results.
+Status on 2 October 2026: the fixed instrumentation suite passed all 34 tests on the connected Pixel 8 Pro. See [current update and verification](15-activity-entry-scroll.md) and [testing setup](14-testing-environment.md). The manual checks below are **instructions to perform**, not passed results.
 
 Use a fresh test profile with fictional data. Instrumented tests use isolated databases; the manual steps alter your app's test records. Keep an encrypted backup if your installation already holds real data.
 
@@ -106,3 +106,11 @@ Optional identity/cloud backup, key recovery, provider/data-location/cost review
 - Switch and re-tap all five main destinations: no press ripple, animated highlight or page transition. Selected cues remain immediate. Test keyboard/D-pad focus and TalkBack on both bottom bar and wide rail.
 - Plan's allocation is a donut in one merged card. Verify category proportions, exact currency allocations, cent rounding, zero income, zero shares and tiny custom shares. Confirm small/large-font percentages move into the legend without overlapping.
 - Test all themes and animation styles. Main navigation remains immediate in every style; charts/settings/category transitions still follow the selected motion setting and Android duration scale.
+
+## Update 0.3.4 entry scrolling and Activity explorer
+
+- Enter an amount and description, open the keyboard, and fling the form down/up. Header and Save remain stable; data stays entered and no edge fling hides the form.
+- From a lower section, drag back to the top without lifting: the form must remain. Lift, make a short pull at the top: remain. Make a fresh downward pull of at least 120dp and release: close. Test direction reversals, Android Back, Close and busy saves.
+- Switch Expenses, Income, Transfers, Refunds and Adjustments. Chart, exact total, count and list must show the same type/range. Transfers count once; refunds do not mingle with expenses; adjustment signs and zero-net intervals remain meaningful.
+- Check pay-period, last-six-month and all-recorded-date ranges, zero intervals, no records, future-dated records, large amounts and interval boundaries. Tap columns and compare exact figures to entries.
+- Test compact width, 200% fonts, landscape, TalkBack, all themes and gesture/three-button navigation. Chart columns stay reachable with at least 48dp touch width.

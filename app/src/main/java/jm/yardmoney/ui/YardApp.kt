@@ -468,15 +468,19 @@ private fun MainPages(
                                 payCommitId = null
                                 form = "transaction"
                             }
-                            if (data.ledger.transactions.isEmpty())
-                                Text("Your first transaction will appear here.")
-                            data.ledger.transactions.forEach { t ->
-                                Record(
-                                    t.description.ifBlank { t.category },
-                                    "${t.date} · ${t.kind.lowercase()} · ${t.bucket.lowercase()}",
-                                    Money.format(t.amountMinor),
-                                ) {
-                                    form = "editTx:${t.id}"
+                            ActivityExplorer(
+                                data.ledger.transactions,
+                                LocalDate.parse(p.periodStart),
+                                model.repo.today,
+                            ) { records ->
+                                records.forEach { t ->
+                                    Record(
+                                        t.description.ifBlank { t.category },
+                                        "${t.date} · ${t.kind.lowercase()} · ${t.bucket.lowercase()}",
+                                        Money.format(t.amountMinor),
+                                    ) {
+                                        form = "editTx:${t.id}"
+                                    }
                                 }
                             }
                             Text("Receipt drafts", style = MaterialTheme.typography.titleLarge)

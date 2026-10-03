@@ -2,7 +2,7 @@
 
 **Understand your money before payday.** YardMoney is an Android budgeting app for managing Jamaican dollars, everyday spending, bills, savings and receipts in one place.
 
-The current **0.3.3 local pilot** stores financial records on your device and works without an account. It uses a green Material interface with adjustable themes, spacing, corners and motion. Optional accounts and cloud backup are planned for the first public release; they are not implemented in this pilot.
+The current **0.3.4 local pilot** stores financial records on your device and works without an account. It uses a green Material interface with adjustable themes, spacing, corners and motion. Optional accounts and cloud backup are planned for the first public release; they are not implemented in this pilot.
 
 [User guide](#using-yardmoney) · [Developer setup](#developer-setup) · [Testing](#testing-and-verification) · [Architecture](#architecture-and-source-map) · [Issues](https://github.com/geo-afk/YardMoney/issues) · [MIT license](LICENSE)
 
@@ -29,20 +29,20 @@ The current **0.3.3 local pilot** stores financial records on your device and wo
 
 | Item | Current state |
 | --- | --- |
-| Version | 0.3.3, Android version code 7 |
+| Version | 0.3.4, Android version code 8 |
 | Availability | Development pilot; no production store release configured |
 | Currency | Jamaican dollars (JMD), displayed as J$ where applicable |
 | Android support | Android 8.0 / API 26 minimum; compile and target API 36 |
 | Accounts and connectivity | Local use without sign-in; optional identity and cloud backup remain planned |
-| Latest host verification | 61 tests passed |
-| Latest device verification | 31 instrumentation tests passed on a Pixel 8 Pro |
+| Latest host verification | 67 tests passed |
+| Latest device verification | 34 instrumentation tests passed on a Pixel 8 Pro |
 | Build checks | Debug, instrumentation APK and optimized unsigned release builds passed |
 | Android lint | Zero errors and 34 warnings in the latest full verification |
 | License | MIT; copyright 2026 Geovanni Stewart |
 
 Verification was recorded on **2 October 2026**. These results describe the tested source, not every Android device or every real receipt. Camera usability, real-receipt accuracy, fresh-device recovery, background reminders and a broader accessibility/device matrix still need manual validation. See [the device checklist](docs/07-device-validation.md).
 
-Some earlier documents and files under `dist/` record historical pilot builds. Their counts and checksums belong to those original artifacts. The latest receipt-detector and Android test-library fixes are in source; build the current source to obtain them.
+Some earlier documents and files under `dist/` record historical pilot builds. Their counts and checksums belong to those original artifacts. The current source includes receipt-detector, test-library and Activity scrolling/chart updates; build it for the latest pilot.
 
 ## Who it is for
 
@@ -62,7 +62,7 @@ This pilot is a manual financial tracker. It does not connect to banks, move mon
 | Area | What you can do |
 | --- | --- |
 | Home | Review safe-to-spend guidance, daily guidance, upcoming commitments and your allocation chart |
-| Activity | Record income, expenses, transfers, refunds and balance adjustments; review transactions and receipts |
+| Activity | Switch record types and date ranges to explore a column chart and matching list; record income, expenses, transfers, refunds and adjustments |
 | Plan | Customize category percentages, review allocation donuts and category activity, manage bills and savings goals |
 | Shop | Build checklists, use recorded product observations and manual estimates, and review price coverage and affordability |
 | More | Expand grouped settings for appearance, accounts, insights, reminders, security and data controls |
@@ -74,6 +74,8 @@ This pilot is a manual financial tracker. It does not connect to banks, move mon
 ### Interface details
 
 The app uses Material calendar date selection, dollar prefixes and grouped currency input, themed navigation, anchored dropdowns, expandable settings and a scrollable money-entry sheet. Home and Plan allocation charts use donuts with readable category legends and exact monetary values.
+
+The money-entry form scrolls independently of its sheet. Returning to the top keeps it open; a new deliberate downward pull at the top closes it. The fixed Save action remains reachable with the keyboard open.
 
 Main navigation changes immediately without a tap ripple or page transition. Other supported chart, category and settings motion follows the selected preference: Calm, Slide, Expressive or Off. Corner preferences are Square, Soft and Rounded; spacing preferences are Compact and Comfortable. Wider windows use a navigation rail.
 
@@ -294,7 +296,7 @@ For a faster device-only rerun after configuring the environment:
 
 ### Evidence and reports
 
-The latest full run passed 61 host tests and 31 device tests on a Pixel 8 Pro, with no skipped device tests. Receipt regression coverage checks ambiguous uniform images as well as a recognizable paper quadrilateral. UI tests cover forms, calendar behavior, category selection and appearance; repository tests use isolated databases for ledger invariants.
+The latest full run passed 67 host tests and 34 device tests on a Pixel 8 Pro, with no skipped device tests. Receipt regression coverage checks ambiguous uniform images as well as a recognizable paper quadrilateral. UI tests cover forms, calendar behavior, category selection and appearance; repository tests use isolated databases for ledger invariants.
 
 | Report | Generated location |
 | --- | --- |
@@ -422,6 +424,7 @@ There are no committed release dates in this repository. Bank integrations, adva
 | [Forms and controls](docs/11-forms-controls-allocation.md) | Scrollable entry sheet and dropdown behavior |
 | [Merged Plan](docs/12-merged-plan-navigation.md) | Budget presentation and selection cues |
 | [Donut and navigation](docs/13-donut-immediate-navigation.md) | Current chart and immediate-menu updates |
+| [Activity and scrolling](docs/15-activity-entry-scroll.md) | Current chart filters, gesture behavior and 0.3.4 verification |
 | [Testing setup and fixes](docs/14-testing-environment.md) | Latest device-test evidence and Windows setup |
 | [Prototype review](design/REVIEW.md) | Browser design review, distinct from Android verification |
 
