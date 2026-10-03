@@ -1,0 +1,18 @@
+<resources>
+    <style name="Theme.YardMoney" parent="Theme.YardMoney.Light" />
+    <style name="Theme.YardMoney.Light" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorAccent">#145D4D</item>
+        <item name="android:windowBackground">#FAFAFC</item>
+    </style>
+    <style name="Theme.YardMoney.Dark" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorAccent">#91D5B8</item>
+        <item name="android:windowBackground">#121318</item>
+    </style>
+    <style name="Theme.YardMoney.Black" parent="Theme.YardMoney.Dark">
+        <item name="android:windowBackground">#000000</item>
+    </style>
+</resources>
