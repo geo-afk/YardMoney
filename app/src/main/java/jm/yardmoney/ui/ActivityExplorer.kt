@@ -171,7 +171,7 @@ private fun ActivityColumnChart(bins: List<ActivityBin>, kind: String) {
     val negative = bins.minOf { it.amount }.coerceAtMost(0).toDouble()
     val span = (positive - negative).coerceAtLeast(1.0)
     val baseline = (positive / span).toFloat()
-    val primary = MaterialTheme.colorScheme.primary
+    val primary = chartColors().first()
     val negativeColor = MaterialTheme.colorScheme.error
     val lineColor = MaterialTheme.colorScheme.outlineVariant
     val dateFormat = remember { DateTimeFormatter.ofPattern("MMM d") }
@@ -208,10 +208,7 @@ private fun ActivityColumnChart(bins: List<ActivityBin>, kind: String) {
                                 (size.height - 12.dp.toPx())
                         if (extent > 0f)
                             drawRect(
-                                color =
-                                    (if (bin.amount < 0) negativeColor else primary).copy(
-                                        alpha = if (selected == index) 1f else .55f
-                                    ),
+                                color = (if (bin.amount < 0) negativeColor else primary),
                                 topLeft = Offset(0f, if (bin.amount >= 0) zero - extent else zero),
                                 size = Size(size.width, extent),
                             )

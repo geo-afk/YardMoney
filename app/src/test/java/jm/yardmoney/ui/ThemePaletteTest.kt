@@ -7,6 +7,28 @@ import org.junit.Test
 
 class ThemePaletteTest {
     @Test
+    fun chartMarksRemainDistinctAndVisibleAcrossThemes() {
+        for (mode in listOf("Light", "Dark", "AMOLED")) {
+            val scheme = customColors(Appearance(mode), mode != "Light")
+            val colors = chartColors(scheme)
+            assertEquals(3, colors.distinct().size)
+            for (color in colors) {
+                for (surface in
+                    listOf(
+                        scheme.surface,
+                        scheme.surfaceContainerLow,
+                        scheme.surfaceContainerHighest,
+                    )) {
+                    assertTrue(
+                        "$mode chart contrast",
+                        ColorContrast.ratio(color.toArgb(), surface.toArgb()) >= 3.0,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun allStaticThemesHaveReadablePairedRoles() {
         for (mode in listOf("Light", "Dark", "AMOLED")) for (accent in
             listOf(

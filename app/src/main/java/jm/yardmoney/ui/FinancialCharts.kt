@@ -16,14 +16,6 @@ import java.time.YearMonth
 import jm.yardmoney.core.*
 import jm.yardmoney.data.*
 
-@Composable
-private fun chartColors() =
-    listOf(
-        MaterialTheme.colorScheme.primary,
-        MaterialTheme.colorScheme.secondary,
-        MaterialTheme.colorScheme.tertiary,
-    )
-
 internal fun bucketCategories(
     splits: List<TransactionSplit>,
     transactions: List<MoneyTransaction>,

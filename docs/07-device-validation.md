@@ -1,6 +1,6 @@
-# Native validation checklist — pilot 0.3.5
+# Native validation checklist — pilot 0.3.6
 
-Status on 2 October 2026: the fixed instrumentation suite passed all 38 tests on the connected Pixel 8 Pro. See [current update and verification](16-live-budget-reservations.md) and [testing setup](14-testing-environment.md). The manual checks below are **instructions to perform**, not passed results.
+Status on 2 October 2026: the fixed instrumentation suite passed all 38 tests on the connected Pixel 8 Pro. See [current update and verification](17-vibrant-charts.md) and [testing setup](14-testing-environment.md). The manual checks below are **instructions to perform**, not passed results.
 
 Use a fresh test profile with fictional data. Instrumented tests use isolated databases; the manual steps alter your app's test records. Keep an encrypted backup if your installation already holds real data.
 
@@ -121,3 +121,8 @@ Optional identity/cloud backup, key recovery, provider/data-location/cost review
 - Transfer into a SAVINGS-type account and back out: Savings funding changes by the net movement. Transfers between savings accounts net to zero; ordinary account transfers do not become spending. Check both the category summary and primary ring agree.
 - Add a weekly/monthly bill once: Plan and Home show one next occurrence for that series. Expand other dates, pay partially/fully and check that the next unpaid occurrence becomes primary without losing history. Inspect dates before paying.
 - Retry a reservation save and confirm it is not duplicated. Two intentionally separate same-name reservations must remain distinct. Check existing recurring installments, paid histories, editing/removal and safe-to-spend calculations remain intact.
+## Update 0.3.6 chart colors
+
+- Check Light, Dark, AMOLED and wallpaper-based themes. Needs should remain emerald, Wants blue and Savings violet in the Home and Plan donut and category bars.
+- Before recording spending, remaining arcs should have visible color. After an expense, the solid used arc should still be distinguishable from the lighter remaining allocation. Verify exact amounts and labels as well as colors.
+- Activity columns should remain bright when unselected; selecting a column should show its underline and update its exact interval amount.

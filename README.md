@@ -2,7 +2,7 @@
 
 **Understand your money before payday.** YardMoney is an Android budgeting app for managing Jamaican dollars, everyday spending, bills, savings and receipts in one place.
 
-The current **0.3.5 local pilot** stores financial records on your device and works without an account. It uses a green Material interface with adjustable themes, spacing, corners and motion. Optional accounts and cloud backup are planned for the first public release; they are not implemented in this pilot.
+The current **0.3.6 local pilot** stores financial records on your device and works without an account. It uses a green Material interface with adjustable themes, spacing, corners and motion. Optional accounts and cloud backup are planned for the first public release; they are not implemented in this pilot.
 
 [User guide](#using-yardmoney) · [Developer setup](#developer-setup) · [Testing](#testing-and-verification) · [Architecture](#architecture-and-source-map) · [Issues](https://github.com/geo-afk/YardMoney/issues) · [MIT license](LICENSE)
 
@@ -29,7 +29,7 @@ The current **0.3.5 local pilot** stores financial records on your device and wo
 
 | Item | Current state |
 | --- | --- |
-| Version | 0.3.5, Android version code 9 |
+| Version | 0.3.6, Android version code 10 |
 | Availability | Development pilot; no production store release configured |
 | Currency | Jamaican dollars (JMD), displayed as J$ where applicable |
 | Android support | Android 8.0 / API 26 minimum; compile and target API 36 |
@@ -298,7 +298,7 @@ For a faster device-only rerun after configuring the environment:
 
 ### Evidence and reports
 
-The latest full run passed 72 host tests and 38 device tests on a Pixel 8 Pro, with no skipped device tests. Receipt regression coverage checks ambiguous uniform images as well as a recognizable paper quadrilateral. UI tests cover forms, calendar behavior, category selection and appearance; repository tests use isolated databases for ledger invariants.
+The latest full run passed 73 host tests and 38 device tests on a Pixel 8 Pro, with no skipped device tests. Receipt regression coverage checks ambiguous uniform images as well as a recognizable paper quadrilateral. UI tests cover forms, calendar behavior, category selection and appearance; repository tests use isolated databases for ledger invariants.
 
 | Report | Generated location |
 | --- | --- |
@@ -427,7 +427,8 @@ There are no committed release dates in this repository. Bank integrations, adva
 | [Merged Plan](docs/12-merged-plan-navigation.md) | Budget presentation and selection cues |
 | [Donut and navigation](docs/13-donut-immediate-navigation.md) | Current chart and immediate-menu updates |
 | [Live budget and bills](docs/16-live-budget-reservations.md) | Current used-versus-allocated charts, recurring groups and retry protection |
-| [Activity and scrolling](docs/15-activity-entry-scroll.md) | Current chart filters, gesture behavior and 0.3.5 verification |
+| [Chart colors](docs/17-vibrant-charts.md) | Shared vibrant palette and theme contrast |
+| [Activity and scrolling](docs/15-activity-entry-scroll.md) | Chart filters and form gesture behavior |
 | [Testing setup and fixes](docs/14-testing-environment.md) | Latest device-test evidence and Windows setup |
 | [Prototype review](design/REVIEW.md) | Browser design review, distinct from Android verification |
 

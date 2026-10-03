@@ -23,12 +23,7 @@ import jm.yardmoney.core.*
 @Composable
 internal fun AllocationDonut(shares: List<Int>, amounts: List<Long>, used: List<Long>) {
     val labels = listOf("Needs", "Wants", "Savings")
-    val colors =
-        listOf(
-            MaterialTheme.colorScheme.primary,
-            MaterialTheme.colorScheme.secondary,
-            MaterialTheme.colorScheme.tertiary,
-        )
+    val colors = chartColors()
     val track = MaterialTheme.colorScheme.surfaceContainerHighest
     val ink = MaterialTheme.colorScheme.onSurface.toArgb()
     val density = LocalDensity.current
@@ -93,7 +88,7 @@ internal fun AllocationDonut(shares: List<Int>, amounts: List<Long>, used: List<
                 if (sweep > 0) {
                     val gap = minOf(3f, sweep * .12f)
                     drawArc(
-                        colors[i].copy(alpha = .18f),
+                        colors[i].copy(alpha = .38f),
                         start + gap / 2,
                         (sweep - gap) * reveal,
                         false,

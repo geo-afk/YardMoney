@@ -1,1 +1,1 @@
-5e7bb8c7701ce829e42a89f9b37647287bce7aaa46b3abde4a29e1185a379238  YardMoney-0.3.5-pilot-debug.apk
+ad8dcfcb1accea7b8359a36284cb47e6017ce7c3998ad491c2fada5269f6f605  YardMoney-0.3.6-pilot-debug.apk
