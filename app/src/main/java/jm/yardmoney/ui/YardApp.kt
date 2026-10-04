@@ -7,25 +7,19 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -181,6 +175,7 @@ private fun MainPages(
     var form by rememberSaveable { mutableStateOf<String?>(null) }
     var draftId by rememberSaveable { mutableStateOf<String?>(null) }
     var payCommitId by rememberSaveable { mutableStateOf<String?>(null) }
+    var quickAdd by rememberSaveable { mutableStateOf(false) }
     var txKind by rememberSaveable { mutableStateOf("EXPENSE") }
     var camera by remember { mutableStateOf(false) }
     var cropUri by rememberSaveable { mutableStateOf<String?>(null) }
@@ -199,24 +194,12 @@ private fun MainPages(
         selectedAccount = id
         prefs.edit { putString("account_scope", id) }
     }
-    val safe = safe(view, model.repo.today)
+    val today = model.repo.today
+    val safe =
+        remember(view.ledger.accounts, view.ledger.commitments, view.ledger.profile, today) {
+            safe(view, today)
+        }
     val snack = rememberSuccessSnackbar(model.success)
-    val icons =
-        listOf(
-            Icons.Default.Home,
-            Icons.AutoMirrored.Filled.List,
-            Icons.Default.Event,
-            Icons.Default.ShoppingCart,
-            Icons.Default.MoreHoriz,
-        )
-    val outlinedIcons =
-        listOf(
-            Icons.Outlined.Home,
-            Icons.AutoMirrored.Outlined.List,
-            Icons.Outlined.Event,
-            Icons.Outlined.ShoppingCart,
-            Icons.Outlined.MoreHoriz,
-        )
     if (scanProgress != null)
         AlertDialog(
             onDismissRequest = {},
@@ -294,66 +277,7 @@ private fun MainPages(
         },
         bottomBar = {
             if (!expanded)
-                Box(Modifier.navigationBarsPadding()) {
-                    NavigationBar(
-                        modifier =
-                            Modifier.padding(horizontal = 12.dp)
-                                .padding(bottom = 4.dp)
-                                .height(
-                                    if (
-                                        androidx.compose.ui.platform.LocalDensity.current
-                                            .fontScale > 1.3f
-                                    )
-                                        96.dp
-                                    else 76.dp
-                                )
-                                .clip(RoundedCornerShape(28.dp))
-                                .border(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outlineVariant,
-                                    RoundedCornerShape(28.dp),
-                                ),
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                        tonalElevation = 0.dp,
-                        windowInsets = WindowInsets(0, 0, 0, 0),
-                    ) {
-                        listOf("Home", "Activity", "Plan", "Shop", "More").forEachIndexed {
-                            index,
-                            label ->
-                            NavigationWithoutTapEffects {
-                                val interaction = remember { MutableInteractionSource() }
-                                val focused by interaction.collectIsFocusedAsState()
-                                NavigationBarItem(
-                                    interactionSource = interaction,
-                                    colors =
-                                        NavigationBarItemDefaults.colors(
-                                            selectedIconColor =
-                                                MaterialTheme.colorScheme.onPrimaryContainer,
-                                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                                            indicatorColor =
-                                                androidx.compose.ui.graphics.Color.Transparent,
-                                            unselectedIconColor =
-                                                MaterialTheme.colorScheme.onSurfaceVariant,
-                                            unselectedTextColor =
-                                                MaterialTheme.colorScheme.onSurfaceVariant,
-                                        ),
-                                    selected = tab == label,
-                                    onClick = { tab = label },
-                                    icon = {
-                                        NavigationSelectionIcon(
-                                            tab == label,
-                                            icons[index],
-                                            outlinedIcons[index],
-                                            focused,
-                                        )
-                                    },
-                                    label = { NavigationSelectionLabel(label, tab == label) },
-                                )
-                            }
-                        }
-                    }
-                }
+                MoneyNavigation(tab, { tab = it }, { quickAdd = true }, addEnabled = !busy)
         },
     ) { inset ->
         Row(Modifier.padding(inset)) {
@@ -364,8 +288,8 @@ private fun MainPages(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                     contentColor = MaterialTheme.colorScheme.onSurface,
                 ) {
-                    listOf("Home", "Activity", "Plan", "Shop", "More").forEachIndexed { index, label
-                        ->
+                    moneyDestinations.forEach { destination ->
+                        val label = destination.label
                         NavigationWithoutTapEffects {
                             val interaction = remember { MutableInteractionSource() }
                             val focused by interaction.collectIsFocusedAsState()
@@ -388,8 +312,8 @@ private fun MainPages(
                                 icon = {
                                     NavigationSelectionIcon(
                                         tab == label,
-                                        icons[index],
-                                        outlinedIcons[index],
+                                        destination.filled,
+                                        destination.outlined,
                                         focused,
                                     )
                                 },
@@ -451,6 +375,20 @@ private fun MainPages(
             }
         }
     }
+
+    if (quickAdd)
+        MoneyQuickAddSheet(
+            dismiss = { quickAdd = false },
+            choose = { action ->
+                quickAdd = false
+                if (action == "scan") form = "scan"
+                else {
+                    txKind = action
+                    payCommitId = null
+                    form = "transaction"
+                }
+            },
+        )
 
     if (form == "scan")
         AlertDialog(

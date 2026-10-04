@@ -64,6 +64,10 @@ internal fun TransactionRows(
     edit: (String) -> Unit,
 ) {
     var shown by rememberSaveable { mutableIntStateOf(30) }
+    val accountsByTransaction =
+        remember(data.accountEntries, data.ledger.accounts) {
+            transactionAccounts(data.accountEntries, data.ledger.accounts)
+        }
     records.take(shown).forEach { tx ->
         key(tx.id) {
             Card(
@@ -93,35 +97,28 @@ internal fun TransactionRows(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        val accountIds =
-                            data.accountEntries
-                                .filter { it.transactionId == tx.id }
-                                .map { it.accountId }
-                                .toSet()
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            data.ledger.accounts
-                                .filter { it.account.id in accountIds }
-                                .forEach { row ->
-                                    val identity = accountIdentity(row.account)
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    ) {
-                                        Icon(
-                                            identity.icon,
-                                            null,
-                                            Modifier.size(16.dp),
-                                            tint = identityColor(identity),
-                                        )
-                                        Text(
-                                            row.account.name,
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
-                                    }
+                            accountsByTransaction[tx.id].orEmpty().forEach { row ->
+                                val identity = accountIdentity(row.account)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Icon(
+                                        identity.icon,
+                                        null,
+                                        Modifier.size(16.dp),
+                                        tint = identityColor(identity),
+                                    )
+                                    Text(
+                                        row.account.name,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
                                 }
+                            }
                         }
                         Text(
                             (if (tx.kind == "EXPENSE") "−"
@@ -158,7 +155,10 @@ internal fun DashboardPage(
     open: (String) -> Unit,
     account: (String) -> Unit,
 ) {
-    val safe = safe(data, today)
+    val safe =
+        remember(data.ledger.accounts, data.ledger.commitments, data.ledger.profile, today) {
+            safe(data, today)
+        }
     Page {
         SectionHeading(
             "Hello, " + data.ledger.profile!!.name.ifBlank { "neighbour" },

@@ -20,8 +20,8 @@ internal fun NavigationSelectionIcon(
     focused: Boolean = false,
 ) {
     val c = MaterialTheme.colorScheme
-    val background = if (selected) c.primaryContainer else Color.Transparent
-    val outline = if (focused) 1f else if (selected) .45f else 0f
+    val background = Color.Transparent
+    val outline = if (focused) 1f else 0f
     Box(
         Modifier.size(48.dp, 32.dp)
             .background(background, MaterialTheme.shapes.small)
@@ -35,7 +35,7 @@ internal fun NavigationSelectionIcon(
         Icon(
             if (selected) filled else outlined,
             null,
-            tint = if (selected) c.onPrimaryContainer else c.onSurfaceVariant,
+            tint = if (selected) c.primary else c.onSurfaceVariant,
             modifier = Modifier.size(24.dp),
         )
     }

@@ -22,8 +22,8 @@ android {
         }
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "0.4.1"
+        versionCode = 13
+        versionName = "0.4.2"
         testInstrumentationRunner = if (demoInstall) "jm.yardmoney.demo.DemoDataInstaller" else "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true }

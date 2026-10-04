@@ -40,10 +40,16 @@ internal fun BudgetOverview(
 ) {
     val profile = data.ledger.profile ?: return
     val current =
-        data.ledger.transactions.filter {
-            it.date >= profile.periodStart && it.date <= today.toString()
+        remember(data.ledger.transactions, profile.periodStart, today) {
+            data.ledger.transactions.filter {
+                it.date >= profile.periodStart && it.date <= today.toString()
+            }
         }
-    val usage = budgetUsage(data, today)
+    // Switching chart tabs does not change the ledger; keep arithmetic off that transition.
+    val usage =
+        remember(data.ledger, data.splits, data.accountEntries, data.savingsAccountIds, today) {
+            budgetUsage(data, today)
+        }
     val income = usage.income
     val shares = listOf(profile.needsBp, profile.wantsBp, profile.savingsBp)
     val allocation = usage.allocation
@@ -100,11 +106,13 @@ internal fun BudgetOverview(
                 label = "Bucket activity",
             ) { index ->
                 val categories =
-                    bucketCategories(
-                        data.splits,
-                        current,
-                        listOf("NEEDS", "WANTS", "SAVINGS")[index],
-                    )
+                    remember(data.splits, current, index) {
+                        bucketCategories(
+                            data.splits,
+                            current,
+                            listOf("NEEDS", "WANTS", "SAVINGS")[index],
+                        )
+                    }
                 val used = usage.used[index]
                 val remaining = allocation[index] - used
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

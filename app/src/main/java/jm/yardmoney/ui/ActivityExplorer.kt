@@ -95,9 +95,14 @@ internal fun ActivityExplorer(
     var kind by rememberSaveable { mutableStateOf("EXPENSE") }
     var range by rememberSaveable { mutableStateOf("PERIOD") }
     var query by rememberSaveable { mutableStateOf("") }
+    val typedRecords =
+        remember(transactions, kind, range, periodStart, today) {
+            activityRecords(transactions, kind, range, periodStart, today)
+        }
+    // Search keystrokes filter the already sorted range instead of parsing and sorting it again.
     val records =
-        remember(transactions, kind, range, periodStart, today, query) {
-            activityRecords(transactions, kind, range, periodStart, today).filter {
+        remember(typedRecords, query) {
+            typedRecords.filter {
                 (it.description + " " + it.category + " " + it.date).contains(query, true)
             }
         }
