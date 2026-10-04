@@ -69,16 +69,21 @@ class ShopUiTest {
         compose.onNodeWithText("Milk").performScrollTo().performClick()
         compose.onNodeWithText("J$150 • estimated total").assertExists()
         compose
+            .onNodeWithTag("shop-editor-list")
+            .performScrollToNode(hasContentDescription("Increase Milk quantity"))
+        compose
             .onNodeWithContentDescription("Increase Milk quantity")
             .performScrollTo()
             .performClick()
         compose.onNodeWithText("J$300 • estimated total").assertExists()
+        compose.onNodeWithTag("shop-editor-list").performScrollToNode(hasText("Save shopping list"))
         compose.onNodeWithText("Save shopping list").performScrollTo().performClick()
         assertTrue(saved)
         compose.onNodeWithText("YARDMONEY").assertIsNotDisplayed()
         compose.onNodeWithContentDescription("Expand or collapse receipt preview").performClick()
         compose.onNodeWithText("Subtotal (priced items)").assertExists()
-        androidx.test.espresso.Espresso.pressBack()
+        // Back now dismisses the staged list editor; use the preview's own collapse action.
+        compose.onNodeWithContentDescription("Expand or collapse receipt preview").performClick()
         compose.onNodeWithText("YARDMONEY").assertIsNotDisplayed()
     }
 

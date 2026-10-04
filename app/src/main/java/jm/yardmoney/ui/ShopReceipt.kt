@@ -6,10 +6,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -32,107 +34,145 @@ import jm.yardmoney.core.Money
 // https://developer.android.com/training/printing/custom-docs
 // https://developer.android.com/training/secure-file-sharing/share-file
 @Composable
-internal fun ShopReceipt(model: ShopReceiptModel, modifier: Modifier = Modifier) {
-    Surface(
-        modifier.fillMaxWidth(),
-        shape = ReceiptPaper,
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-        tonalElevation = 1.dp,
-    ) {
-        Column(
-            Modifier.padding(horizontal = 20.dp, vertical = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+internal fun ShopReceipt(
+    model: ShopReceiptModel,
+    modifier: Modifier = Modifier,
+    appearance: ReceiptAppearance = rememberReceiptAppearance(),
+    thumbnail: Boolean = false,
+) {
+    val background =
+        receiptBackground(
+            appearance,
+            MaterialTheme.colorScheme.background.toArgb(),
+            MaterialTheme.colorScheme.primary.toArgb(),
+        )
+    val ink = Color(receiptInk(background))
+    val thermal = appearance.layout == ReceiptLayout.Thermal
+    val compact = appearance.layout == ReceiptLayout.Compact || thumbnail
+    val font = if (thermal) FontFamily.Monospace else FontFamily.Default
+    // Repair all text and rules against arbitrary paper colors to WCAG 4.5:1.
+    androidx.compose.runtime.CompositionLocalProvider(LocalContentColor provides ink) {
+        Surface(
+            modifier.fillMaxWidth(),
+            shape = if (thermal) ReceiptPaper else MaterialTheme.shapes.medium,
+            color = Color(background),
+            contentColor = ink,
+            tonalElevation = 0.dp,
         ) {
-            Text(
-                "YARDMONEY",
-                Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleLarge,
-            )
-            Text(
-                model.name,
-                Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-                fontFamily = FontFamily.Monospace,
-            )
-            Text(
-                model.date ?: "Date not recorded",
-                Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-                fontFamily = FontFamily.Monospace,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            ReceiptRule()
-            Row(Modifier.fillMaxWidth()) {
+            Column(
+                Modifier.padding(
+                    horizontal = if (compact) 12.dp else 20.dp,
+                    vertical = if (compact) 12.dp else 28.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 12.dp),
+            ) {
                 Text(
-                    "ITEM / QTY × PRICE",
-                    Modifier.weight(1f),
-                    fontFamily = FontFamily.Monospace,
-                    style = MaterialTheme.typography.labelSmall,
+                    "YARDMONEY",
+                    Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    fontFamily = font,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge,
                 )
                 Text(
-                    "TOTAL",
-                    fontFamily = FontFamily.Monospace,
-                    style = MaterialTheme.typography.labelSmall,
+                    model.name,
+                    Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    fontFamily = font,
                 )
-            }
-            model.lines.forEach { line ->
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        line.item.name,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Text(
-                            "${line.item.quantity} × ${line.price?.let(Money::format) ?: "Not specified"}",
-                            Modifier.weight(1f),
-                            fontFamily = FontFamily.Monospace,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        Text(
-                            line.total?.let(Money::format) ?: "—",
-                            Modifier.widthIn(max = 140.dp),
-                            textAlign = TextAlign.End,
-                            fontFamily = FontFamily.Monospace,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    if (line.item.note.isNotBlank())
-                        Text(line.item.note, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-            ReceiptRule()
-            ReceiptTotal("Subtotal (priced items)", model.subtotal)
-            ReceiptTotal(
-                if (model.missing > 0) "Partial estimated total" else "Estimated total",
-                model.subtotal,
-                true,
-            )
-            if (model.missing > 0)
                 Text(
-                    "${shopCount(model.missing, "unpriced item")} excluded.",
-                    fontFamily = FontFamily.Monospace,
+                    model.date ?: "Not specified",
+                    Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    fontFamily = font,
                     style = MaterialTheme.typography.bodySmall,
                 )
-            Text(
-                "Your estimate • prices may change",
-                Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-                fontFamily = FontFamily.Monospace,
-                style = MaterialTheme.typography.bodySmall,
-            )
+                ReceiptRule()
+                Row(Modifier.fillMaxWidth()) {
+                    Text(
+                        "ITEM / QTY × PRICE",
+                        Modifier.weight(1f),
+                        fontFamily = font,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                    Text(
+                        "TOTAL",
+                        fontFamily = font,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+                val lines =
+                    if (appearance.layout == ReceiptLayout.Detailed)
+                        model.lines.sortedBy { it.item.category }
+                    else model.lines
+                if (lines.isEmpty())
+                    Text("No item lines were captured.", style = MaterialTheme.typography.bodySmall)
+                lines.forEachIndexed { index, line ->
+                    if (
+                        appearance.layout == ReceiptLayout.Detailed &&
+                            (index == 0 || lines[index - 1].item.category != line.item.category)
+                    )
+                        Text(line.item.category, fontWeight = FontWeight.Bold)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            line.item.name,
+                            fontFamily = font,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement =
+                                Arrangement.spacedBy(if (compact) 4.dp else 12.dp),
+                        ) {
+                            Text(
+                                "${if (line.quantitySpecified) line.item.quantity else "Not specified"} × ${line.price?.let(Money::format) ?: "Not specified"}",
+                                Modifier.weight(1f),
+                                fontFamily = font,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Text(
+                                line.total?.let(Money::format) ?: "Not specified",
+                                Modifier.widthIn(max = 140.dp),
+                                textAlign = TextAlign.End,
+                                fontFamily = font,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        if (line.item.note.isNotBlank())
+                            Text(line.item.note, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                ReceiptRule()
+                ReceiptTotal(
+                    if (model.scanned) "Subtotal" else "Subtotal (priced items)",
+                    if (model.scanned) model.recordedSubtotal else model.subtotal,
+                )
+                ReceiptTotal(
+                    if (model.scanned) "Receipt total"
+                    else if (model.missing > 0) "Partial estimated total" else "Estimated total",
+                    if (model.scanned) model.actualTotal else model.subtotal,
+                    true,
+                )
+                if (model.missing > 0)
+                    Text(
+                        "${shopCount(model.missing, "unpriced item")} excluded.",
+                        fontFamily = font,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                Text(
+                    if (model.scanned) "Saved receipt" else "Your estimate • prices may change",
+                    Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    fontFamily = font,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun ReceiptTotal(label: String, total: Long, bold: Boolean = false) {
+private fun ReceiptTotal(label: String, total: Long?, bold: Boolean = false) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             label,
@@ -141,7 +181,7 @@ private fun ReceiptTotal(label: String, total: Long, bold: Boolean = false) {
             fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
         )
         Text(
-            Money.format(total),
+            total?.let(Money::format) ?: "Not specified",
             Modifier.widthIn(max = 160.dp),
             textAlign = TextAlign.End,
             fontFamily = FontFamily.Monospace,
@@ -152,7 +192,7 @@ private fun ReceiptTotal(label: String, total: Long, bold: Boolean = false) {
 
 @Composable
 private fun ReceiptRule() {
-    val color = MaterialTheme.colorScheme.outline
+    val color = LocalContentColor.current
     Canvas(Modifier.fillMaxWidth().height(1.dp)) {
         drawLine(
             color,

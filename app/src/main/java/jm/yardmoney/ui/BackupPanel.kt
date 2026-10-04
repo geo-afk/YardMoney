@@ -9,14 +9,29 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import jm.yardmoney.AppModel
 import jm.yardmoney.security.PortableBackup
 
+// Retain the password across rotation in memory, without putting it in saved bundles or
+// preferences.
+internal class BackupFormViewModel : ViewModel() {
+    val mode = mutableStateOf<String?>(null)
+    val password = mutableStateOf("")
+    val acknowledged = mutableStateOf(false)
+
+    override fun onCleared() {
+        password.value = ""
+    }
+}
+
 @Composable
 internal fun BackupPanel(model: AppModel, restoreOnly: Boolean = false) {
-    var mode by remember { mutableStateOf<String?>(null) }
-    var password by remember { mutableStateOf("") }
-    var acknowledged by remember { mutableStateOf(false) }
+    val form: BackupFormViewModel = viewModel()
+    var mode by form.mode
+    var password by form.password
+    var acknowledged by form.acknowledged
     val busy by model.busy.collectAsState()
     val save =
         rememberLauncherForActivityResult(
@@ -88,7 +103,11 @@ internal fun BackupPanel(model: AppModel, restoreOnly: Boolean = false) {
         }
     }
     if (mode != null)
-        AlertDialog(
+        EditFormSheet(
+            titleText = "$mode encrypted backup",
+            busy = busy,
+            dirty = password.isNotBlank() || acknowledged,
+            keyValue = if (password.isBlank()) "Password not specified" else "Password entered",
             onDismissRequest = {
                 mode = null
                 password = ""
@@ -132,10 +151,7 @@ internal fun BackupPanel(model: AppModel, restoreOnly: Boolean = false) {
             },
             dismissButton = {
                 TextButton(
-                    onClick = {
-                        mode = null
-                        password = ""
-                    },
+                    onClick = LocalEditDismiss.current,
                     shape = MaterialTheme.shapes.small,
                 ) {
                     Text("Cancel")

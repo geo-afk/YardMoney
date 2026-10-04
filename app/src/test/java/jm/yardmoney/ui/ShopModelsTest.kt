@@ -10,6 +10,15 @@ class ShopModelsTest {
         ShoppingItem(name, "list", name, qty, null, price, false, checked)
 
     @Test
+    fun capturedReceiptUnitPriceRequiresAnExplicitQuantity() {
+        val unknown = jm.yardmoney.core.SuggestedLine("Milk 20.00", "Milk", "1", 2000)
+        assertNull(capturedReceiptLine("one", unknown).price)
+        val captured = unknown.copy(quantity = "2", quantitySpecified = true)
+        assertEquals(1000L, capturedReceiptLine("two", captured).price)
+        assertEquals(2000L, capturedReceiptLine("two", captured).total)
+    }
+
+    @Test
     fun totalsExcludeUnknownPricesAndTrackRemaining() {
         val receipt =
             shopReceipt(
@@ -100,6 +109,52 @@ class ShopModelsTest {
         val scoped = scopedFinance(data, "cash")
         assertEquals(100L, shopCatalog(scoped).single().price)
         assertEquals("2026-10-01", shopCatalog(scoped).single().date)
+    }
+
+    @Test
+    fun savedCatalogIncludesManualItemsAndDeduplicatesAcrossReceipts() {
+        val data = catalogFixture()
+        val updated =
+            data.copy(
+                shopping =
+                    ShoppingState(
+                        listOf(ShoppingList("list", "Trip", "2026-10-04")),
+                        listOf(item(" MILK ", 300), item("Tea", null)),
+                    )
+            )
+        val catalog = shopCatalog(updated)
+        assertEquals(2, catalog.size)
+        val milk = searchShopCatalog(catalog, "milk").single()
+        assertEquals(300L, milk.price)
+        assertEquals(2, milk.purchases)
+        assertNull(searchShopCatalog(catalog, "tea").single().price)
+    }
+
+    @Test
+    fun savedCorrectionsKeepSearchAndPlanningPricesInSyncAndMergeRenames() {
+        val catalog =
+            listOf(
+                CatalogItem("Rice", null, 100, "Groceries", "2026-10-01"),
+                CatalogItem("Oats", null, 200, "Groceries", "2026-10-04"),
+            )
+        val corrections = mapOf("rice" to CatalogCorrection(" OATS ", null, "Household"))
+        val merged = correctedShopCatalog(catalog, corrections)
+        assertEquals(1, merged.size)
+        assertEquals(setOf("rice", "oats"), merged.single().sourceKeys.toSet())
+        assertEquals(200L, searchShopCatalog(merged, "oats").single().price)
+        val deleted =
+            correctedShopCatalog(
+                catalog,
+                mapOf("rice" to CatalogCorrection("Rice", 100, "Groceries", true)),
+            )
+        assertTrue(searchShopCatalog(deleted, "rice").isEmpty())
+        val renamed =
+            correctedShopCatalog(
+                catalog,
+                mapOf("rice" to CatalogCorrection("Brown rice", null, "Household")),
+            )
+        assertNull(searchShopCatalog(renamed, "brown rice").single().price)
+        assertEquals("Household", searchShopCatalog(renamed, "brown rice").single().category)
     }
 
     private fun catalogFixture(): FinanceSnapshot {

@@ -59,9 +59,9 @@ class RedesignUiTest {
                 }
             }
         }
-        compose.onNodeWithText("Internet").assertExists()
+        compose.onNode(hasSetTextAction() and hasText("Internet")).assertExists()
         compose.onNodeWithText("Save").performClick()
-        compose.onNodeWithText("Water").assertExists()
+        compose.onNode(hasSetTextAction() and hasText("Water")).assertExists()
         compose.onNodeWithText("Internet").assertDoesNotExist()
     }
 

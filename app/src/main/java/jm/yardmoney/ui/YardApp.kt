@@ -838,40 +838,22 @@ internal fun SimpleForm(
         rememberSaveable(title, choices, saver = stringStatesSaver) {
             choices.map { mutableStateOf(it.second.first()) }
         }
-    AlertDialog(
-        onDismissRequest = { if (!busy) close() },
-        title = { Text(title) },
-        text = {
-            Column(
-                Modifier.verticalScroll(rememberScrollState()).padding(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                if (description != null) Text(description)
-                labels.forEachIndexed { i, label ->
-                    Field(label, values[i].value) { values[i].value = it }
-                }
-                choices.forEachIndexed { i, c ->
-                    Choice(c.first, selected[i].value, c.second) { selected[i].value = it }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = !busy,
-                onClick = { save(values.map { it.value }, selected.map { it.value }) },
-                shape = MaterialTheme.shapes.small,
-            ) {
-                Text(if (busy) "Saving…" else "Save")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                enabled = !busy,
-                onClick = close,
-                shape = MaterialTheme.shapes.small,
-            ) {
-                Text("Cancel")
-            }
-        },
-    )
+    MoneyEntrySheet(
+        title,
+        "Save",
+        busy,
+        true,
+        save = { save(values.map { it.value }, selected.map { it.value }) },
+        close = close,
+        dirty =
+            values.map { it.value } != initial ||
+                selected.map { it.value } != choices.map { it.second.first() },
+        keyValue = values.firstOrNull()?.value.orEmpty(),
+    ) {
+        if (description != null) Text(description)
+        labels.forEachIndexed { i, label -> Field(label, values[i].value) { values[i].value = it } }
+        choices.forEachIndexed { i, c ->
+            Choice(c.first, selected[i].value, c.second) { selected[i].value = it }
+        }
+    }
 }

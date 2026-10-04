@@ -1,8 +1,6 @@
 package jm.yardmoney.ui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -16,54 +14,32 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun ReceiptDetails(model: AppModel, receipt: Receipt, busy: Boolean, close: () -> Unit) {
     val items by
-        produceState<List<ReceiptItem>>(emptyList(), receipt.id) {
+        produceState<List<ReceiptItem>?>(null, receipt.id) {
             value = withContext(Dispatchers.IO) { model.repo.dao.receiptItems(receipt.id) }
         }
     var removing by remember { mutableStateOf(false) }
     var deleteExpense by remember { mutableStateOf(false) }
     if (!removing)
-        AlertDialog(
-            onDismissRequest = close,
-            title = { Text(receipt.merchant) },
-            text = {
-                Column(
-                    Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text(
-                        "${receipt.date} · ${receipt.branch.ifBlank{"Branch unknown"}} · ${receipt.parish}"
-                    )
-                    AmountRow("Reviewed total", receipt.totalMinor)
-                    items.forEach {
-                        Record(
-                            it.confirmedName,
-                            "Quantity " + it.quantity,
-                            Money.format(it.totalMinor),
-                        )
+        StagedEditSheet(
+            title = "Receipt",
+            keyValue = "${receipt.merchant} · ${Money.format(receipt.totalMinor)}",
+            busy = busy,
+            dirty = false,
+            close = close,
+            actions = {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
+                    TextButton(onClick = { removing = true }, enabled = !busy) {
+                        Text("Remove receipt")
                     }
-                    if (items.isEmpty()) Text("Total-only expense: no product prices were stored.")
-                    if (receipt.adjustmentMinor != 0L)
-                        AmountRow("Tax / discount adjustment", receipt.adjustmentMinor)
-                    Text(receipt.rawText, style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.weight(1f))
+                    Button(onClick = close) { Text("Done") }
                 }
             },
-            confirmButton = {
-                TextButton(
-                    onClick = close,
-                    shape = MaterialTheme.shapes.small,
-                ) {
-                    Text("Done")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { removing = true },
-                    shape = MaterialTheme.shapes.small,
-                ) {
-                    Text("Remove receipt")
-                }
-            },
-        )
+        ) {
+            val loaded = items
+            if (loaded == null) CircularProgressIndicator()
+            else SavedReceiptContent(receipt, loaded)
+        }
     else
         AlertDialog(
             onDismissRequest = { removing = false },
@@ -100,4 +76,49 @@ internal fun ReceiptDetails(model: AppModel, receipt: Receipt, busy: Boolean, cl
                 }
             },
         )
+}
+
+// Total-only ledger entries can still contain useful scanned product lines. Display them
+// without creating price-history records or changing the saved financial transaction.
+internal fun savedReceiptPreview(receipt: Receipt, items: List<ReceiptItem>): ShopReceiptModel {
+    val parsed = ReceiptDraftCodec.parse(receipt.rawText)
+    val lines =
+        if (items.isEmpty())
+            parsed.lines.mapIndexed { index, line -> capturedReceiptLine("scan:$index", line) }
+        else
+            items.map { item ->
+                val price = runCatching {
+                    Money.unitPrice(
+                        item.totalMinor,
+                        jm.yardmoney.core.Quantity.parse(item.quantity),
+                    )
+                }
+                    .getOrNull()
+                ShopReceiptLine(
+                    ShoppingItem(
+                        item.id,
+                        "",
+                        item.confirmedName.ifBlank { item.rawName },
+                        item.quantity,
+                        null,
+                        price,
+                        false,
+                    ),
+                    price,
+                    item.totalMinor,
+                )
+            }
+    return ShopReceiptModel(
+        receipt.merchant.ifBlank { "Not specified" },
+        receipt.date.ifBlank { "Not specified" },
+        lines,
+        receipt.totalMinor,
+        scanned = true,
+        recordedSubtotal = parsed.subtotalMinor,
+    )
+}
+
+@Composable
+internal fun SavedReceiptContent(receipt: Receipt, items: List<ReceiptItem>) {
+    ShopReceipt(remember(receipt, items) { savedReceiptPreview(receipt, items) })
 }

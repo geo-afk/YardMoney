@@ -437,6 +437,12 @@ class FinanceRepository(private val db: YardDatabase) {
         return key
     }
 
+    suspend fun saveScannedDraft(raw: String, fingerprint: String): String = db.withTransaction {
+        val key = saveDraft(raw, null, fingerprint)
+        saveReviewDraft(key, ReceiptDraftCodec.encode(raw))
+        key
+    }
+
     suspend fun duplicates(r: ConfirmedReceipt): List<Receipt> {
         val d = dao.draft(r.draftId) ?: error("Draft not found.")
         return dao.duplicateCandidates(d.fingerprint, r.date.toString(), r.totalMinor).filter {
@@ -520,7 +526,9 @@ class FinanceRepository(private val db: YardDatabase) {
                 r.date.toString(),
                 r.totalMinor,
                 r.adjustmentMinor,
-                draft.rawText.substringBefore("\n\n[Review edits]\n") +
+                // Retain captured/reviewed lines for the receipt preview, including total-only
+                // expenses. Price history still comes exclusively from confirmed receipt_items.
+                draft.rawText +
                     if (r.metadata.isEmpty()) ""
                     else
                         "\n\n[Verified receipt details]\n" +

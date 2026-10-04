@@ -38,6 +38,34 @@ class RepositoryTest {
         assertTrue(snapshot.ledger.transactions.isEmpty())
     }
 
+    @Test
+    fun textOnlyScansPersistAndCanBeParsedAgainWithoutAPhoto() = runBlocking {
+        // Existing nullable imageRef and rawText columns cover new scans without a schema fork.
+        val raw = "MARKET\n2026-10-04\nRICE 12.00\nTOTAL 12.00"
+        val id = repo.saveScannedDraft(raw, "text-only-scan")
+        val stored = requireNotNull(repo.dao.draft(id))
+        assertNull(stored.imageRef)
+        assertEquals(raw, stored.rawText.substringBefore("\n\n[Review edits]"))
+        assertTrue(stored.rawText.contains("[Review edits]"))
+        val parsed = ReceiptDraftCodec.parse(stored.rawText)
+        assertEquals(1200L, parsed.totalMinor)
+        assertEquals("RICE", parsed.lines.single().name)
+    }
+
+    @Test
+    fun olderScansAndUnknownFieldsRemainReadableWithoutSchemaChanges() = runBlocking {
+        val raw = "MARKET\nRICE 12.00"
+        val oldId = repo.saveDraft(raw, null, "legacy-draft")
+        val newId = repo.saveScannedDraft(raw, "parsed-draft")
+        val legacy = ReceiptDraftCodec.parse(requireNotNull(repo.dao.draft(oldId)).rawText)
+        val parsed = ReceiptDraftCodec.parse(requireNotNull(repo.dao.draft(newId)).rawText)
+        assertEquals(legacy.merchant, parsed.merchant)
+        assertEquals(legacy.lines, parsed.lines)
+        assertNull(parsed.date)
+        assertNull(parsed.totalMinor)
+        assertNull(parsed.subtotalMinor)
+    }
+
     private lateinit var db: YardDatabase
     private lateinit var repo: FinanceRepository
     private lateinit var cash: String
@@ -362,6 +390,39 @@ class RepositoryTest {
         assertEquals(1, Regex("\\[Review edits]").findAll(raw).count())
         assertTrue(repo.snapshot.first().ledger.transactions.isEmpty())
         assertEquals(1, ReceiptParser.parse(raw).lines.size)
+    }
+
+    @Test
+    fun totalOnlyConfirmationRetainsReviewedDisplayItemsWithoutCreatingPrices() = runBlocking {
+        val draft = repo.saveScannedDraft("STORE\n1 Rice 100.00\nTOTAL 100.00", "display-only")
+        repo.saveReviewDraft(
+            draft,
+            """{"version":1,"merchant":"Store","date":"$today","total":"100.00","items":[{"raw":"1 Rice 100.00","name":"Brown rice","quantity":"1","quantitySpecified":true,"total":"100.00"}]}""",
+        )
+        repo.confirmReceipt(
+            ConfirmedReceipt(
+                draft,
+                "Store",
+                "",
+                "",
+                today,
+                10000,
+                0,
+                emptyList(),
+                cash,
+                "display-only-save",
+                true,
+                metadata = mapOf("Receipt number" to "ABC"),
+            )
+        )
+        val state = repo.snapshot.first()
+        assertEquals(
+            "Brown rice",
+            ReceiptDraftCodec.parse(state.receipt.receipts.single().rawText).lines.single().name,
+        )
+        assertEquals(10000L, state.ledger.transactions.single().amountMinor)
+        assertTrue(state.receiptItems.isEmpty())
+        assertTrue(state.receipt.prices.isEmpty())
     }
 
     @Test

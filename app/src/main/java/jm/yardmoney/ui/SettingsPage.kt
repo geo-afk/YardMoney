@@ -96,6 +96,7 @@ internal fun SettingsPage(model: AppModel, data: FinanceSnapshot, open: (String)
             expanded == "Receipts",
             { toggle("Receipts") },
         ) {
+            ReceiptSettings()
             Text("Scans stay private drafts until you review and confirm them.")
             FilledTonalButton(
                 onClick = { open("scan") },
@@ -129,7 +130,7 @@ internal fun SettingsPage(model: AppModel, data: FinanceSnapshot, open: (String)
         ) {
             AppLockSetting()
             Text(
-                "Your database and receipt photos are encrypted on this device. Receipt recognition runs offline. No YardMoney usage tracking, bank connections or account required."
+                "Your database is encrypted on this device. New scans retain extracted text without storing the photo. Receipt recognition runs offline. No YardMoney usage tracking, bank connections or account required."
             )
             Text(
                 "Scanning uses Google's ML Kit. Review its privacy information alongside YardMoney's notices.",

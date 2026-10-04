@@ -1,26 +1,18 @@
 package jm.yardmoney.ui
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import java.time.LocalDate
 import jm.yardmoney.AppModel
 import jm.yardmoney.core.*
 import jm.yardmoney.data.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -71,9 +63,7 @@ internal fun ReceiptReview(
     var parish by rememberSaveable(draft.id) { mutableStateOf(savedText("parish", "")) }
     var date by
         rememberSaveable(draft.id) {
-            mutableStateOf(
-                savedText("date", suggestion.date?.toString() ?: model.repo.today.toString())
-            )
+            mutableStateOf(savedText("date", suggestion.date?.toString() ?: ""))
         }
     var total by
         rememberSaveable(draft.id) {
@@ -86,7 +76,10 @@ internal fun ReceiptReview(
     var account by
         rememberSaveable(draft.id) {
             mutableStateOf(
-                savedText("account", initialAccountId ?: data.ledger.accounts.first().account.id)
+                savedText(
+                    "account",
+                    initialAccountId ?: data.ledger.accounts.firstOrNull()?.account?.id.orEmpty(),
+                )
             )
         }
     var totalOnly by
@@ -188,7 +181,7 @@ internal fun ReceiptReview(
                 )
             }
         }
-    fun keepDraft() {
+    fun reviewEdits(): String {
         val json = JSONObject().put("version", 1)
         mapOf(
                 "merchant" to merchant,
@@ -223,22 +216,11 @@ internal fun ReceiptReview(
             )
         }
         json.put("items", items)
-        model.act(close) { model.repo.saveReviewDraft(draft.id, json.toString()) }
+        return json.toString()
     }
-    val image by
-        produceState<android.graphics.Bitmap?>(null, draft.id) {
-            value =
-                withContext(Dispatchers.IO) {
-                    runCatching {
-                        draft.imageRef?.let {
-                            jm.yardmoney.receipts.ReceiptImages.decode(
-                                model.app.storage.readReceipt(it)
-                            )
-                        }
-                    }
-                        .getOrNull()
-                }
-        }
+    fun keepDraft() {
+        model.act(close) { model.repo.saveReviewDraft(draft.id, reviewEdits()) }
+    }
     if (rescanPrompt)
         AlertDialog(
             onDismissRequest = { rescanPrompt = false },
@@ -268,289 +250,318 @@ internal fun ReceiptReview(
                 }
             },
         )
-    val owned = image
-    DisposableEffect(owned) { onDispose { owned?.recycle() } }
-    Dialog(
-        onDismissRequest = { if (!busy) keepDraft() },
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Surface(Modifier.fillMaxSize()) {
-            Column(
-                Modifier.safeDrawingPadding()
-                    .verticalScroll(rememberScrollState())
-                    .imePadding()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+    var editingDetails by rememberSaveable(draft.id) { mutableStateOf(false) }
+    // Deliberate discard closes without saving edits; Keep draft below explicitly saves them.
+    StagedEditSheet("Check your receipt", "$merchant · $total", busy, true, close) {
+        Text("Check the receipt below. Use Edit details to correct anything before saving.")
+        val previewLines = rows.mapIndexed { index, line ->
+            val amount = runCatching { Money.parse(line.total) }.getOrNull()
+            val quantity = runCatching { Quantity.parse(line.quantity) }.getOrNull()
+            val quantitySpecified =
+                suggestion.lines.find { it.raw == line.raw }?.quantitySpecified == true ||
+                    line.quantity != "1"
+            val price =
+                if (amount != null && quantity != null && quantitySpecified)
+                    runCatching { Money.unitPrice(amount, quantity) }.getOrNull()
+                else null
+            ShopReceiptLine(
+                ShoppingItem(
+                    "review:$index",
+                    "",
+                    line.name.ifBlank { "Not specified" },
+                    line.quantity,
+                    null,
+                    price,
+                    false,
+                    category = "Not specified",
+                ),
+                price,
+                amount,
+                quantitySpecified = quantitySpecified,
+            )
+        }
+        ShopReceipt(
+            ShopReceiptModel(
+                merchant.ifBlank { "Not specified" },
+                date.takeIf { it.isNotBlank() },
+                previewLines,
+                runCatching { Money.parse(total) }.getOrNull(),
+                scanned = true,
+                recordedSubtotal = runCatching { Money.parse(subtotal) }.getOrNull(),
+            )
+        )
+        OutlinedButton(
+            onClick = { editingDetails = !editingDetails },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(if (editingDetails) "Hide details" else "Edit details")
+        }
+        if (editingDetails) {
+            Field("Merchant", merchant) {
+                merchant = it
+                checked = false
+            }
+            Field("Branch", branch) {
+                branch = it
+                checked = false
+            }
+            Field("Parish", parish) {
+                parish = it
+                checked = false
+            }
+            Field("Purchase date (YYYY-MM-DD)", date) {
+                date = it
+                checked = false
+            }
+            Field("Receipt time (optional)", time) {
+                time = it
+                checked = false
+            }
+            Field("Payment method (optional)", payment) {
+                payment = it
+                checked = false
+            }
+            Field("Receipt number (optional)", receiptNo) {
+                receiptNo = it
+                checked = false
+            }
+            Field("Transaction number (optional)", transactionNo) {
+                transactionNo = it
+                checked = false
+            }
+            Field("Subtotal (J$; optional)", subtotal) {
+                subtotal = it
+                checked = false
+            }
+            Field("Tax (J$; optional)", tax) {
+                tax = it
+                checked = false
+            }
+            Field("Discount (J$; optional)", discount) {
+                discount = it
+                checked = false
+            }
+            Text(
+                "Tax may already be included. Check the adjustment rather than adding tax twice.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Field("Receipt total (J$)", total) {
+                total = it
+                checked = false
+            }
+            IdChoice(
+                "Pay from",
+                account,
+                data.ledger.accounts.associate { it.account.id to it.account.name },
             ) {
-                Text("Check your receipt", style = MaterialTheme.typography.headlineSmall)
-                Text("Nothing has been added to your budget. Compare every field with the photo.")
-                image?.let {
-                    Image(
-                        it.asImageBitmap(),
-                        contentDescription = "Original receipt",
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
-                    )
-                }
-                suggestion.warnings.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-                Field("Merchant", merchant) {
-                    merchant = it
-                    checked = false
-                }
-                Field("Branch", branch) {
-                    branch = it
-                    checked = false
-                }
-                Field("Parish", parish) {
-                    parish = it
-                    checked = false
-                }
-                Field("Purchase date (YYYY-MM-DD)", date) {
-                    date = it
-                    checked = false
-                }
-                Field("Receipt time (optional)", time) {
-                    time = it
-                    checked = false
-                }
-                Field("Payment method (optional)", payment) {
-                    payment = it
-                    checked = false
-                }
-                Field("Receipt number (optional)", receiptNo) {
-                    receiptNo = it
-                    checked = false
-                }
-                Field("Transaction number (optional)", transactionNo) {
-                    transactionNo = it
-                    checked = false
-                }
-                Field("Subtotal (J$; optional)", subtotal) {
-                    subtotal = it
-                    checked = false
-                }
-                Field("Tax (J$; optional)", tax) {
-                    tax = it
-                    checked = false
-                }
-                Field("Discount (J$; optional)", discount) {
-                    discount = it
-                    checked = false
-                }
+                account = it
+                checked = false
+            }
+            IdChoice(
+                "Link an existing expense (optional)",
+                linked,
+                mapOf("" to "Create a new expense") +
+                    data.ledger.transactions
+                        .filter { it.kind == "EXPENSE" }
+                        .associate {
+                            it.id to
+                                "${it.description} · ${Money.format(it.amountMinor)} · ${it.date}"
+                        },
+            ) {
+                linked = it
+                checked = false
+            }
+            Tick("Save a total-only expense (no product prices)", totalOnly) {
+                totalOnly = it
+                checked = false
+            }
+            if (!totalOnly) {
                 Text(
-                    "Tax may already be included. Check the adjustment rather than adding tax twice.",
+                    "Use kg for weight, L for liquids or item for counts. Convert g ÷ 1000 and mL ÷ 1000. Package size is per package; quantity is packages bought.",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Field("Receipt total (J$)", total) {
-                    total = it
-                    checked = false
-                }
-                IdChoice(
-                    "Pay from",
-                    account,
-                    data.ledger.accounts.associate { it.account.id to it.account.name },
-                ) {
-                    account = it
-                    checked = false
-                }
-                IdChoice(
-                    "Link an existing expense (optional)",
-                    linked,
-                    mapOf("" to "Create a new expense") +
-                        data.ledger.transactions
-                            .filter { it.kind == "EXPENSE" }
-                            .associate {
-                                it.id to
-                                    "${it.description} · ${Money.format(it.amountMinor)} · ${it.date}"
-                            },
-                ) {
-                    linked = it
-                    checked = false
-                }
-                Tick("Save a total-only expense (no product prices)", totalOnly) {
-                    totalOnly = it
-                    checked = false
-                }
-                if (!totalOnly) {
-                    Text(
-                        "Use kg for weight, L for liquids or item for counts. Convert g ÷ 1000 and mL ÷ 1000. Package size is per package; quantity is packages bought.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    rows.forEachIndexed { index, line ->
-                        OutlinedCard {
-                            Column(
-                                Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                rows.forEachIndexed { index, line ->
+                    OutlinedCard {
+                        Column(
+                            Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                "Item ${index+1}",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(line.confidence, style = MaterialTheme.typography.bodySmall)
+                            Field("Product name", line.name) {
+                                line.name = it
+                                line.verified = false
+                            }
+                            Field("Quantity", line.quantity) {
+                                line.quantity = it
+                                line.verified = false
+                            }
+                            Field("Line total (J$)", line.total) {
+                                line.total = it
+                                line.verified = false
+                            }
+                            Field("Package size (optional)", line.size) {
+                                line.size = it
+                                line.verified = false
+                            }
+                            Choice("Unit", line.unit, listOf("kg", "L", "item")) {
+                                line.unit = it
+                                line.verified = false
+                            }
+                            Tick("I checked this item", line.verified) { line.verified = it }
+                            TextButton(
+                                enabled = !busy,
+                                onClick = { rows.remove(line) },
+                                shape = MaterialTheme.shapes.small,
                             ) {
-                                Text(
-                                    "Item ${index+1}",
-                                    style = MaterialTheme.typography.titleMedium,
-                                )
-                                Text(line.confidence, style = MaterialTheme.typography.bodySmall)
-                                Field("Product name", line.name) {
-                                    line.name = it
-                                    line.verified = false
-                                }
-                                Field("Quantity", line.quantity) {
-                                    line.quantity = it
-                                    line.verified = false
-                                }
-                                Field("Line total (J$)", line.total) {
-                                    line.total = it
-                                    line.verified = false
-                                }
-                                Field("Package size (optional)", line.size) {
-                                    line.size = it
-                                    line.verified = false
-                                }
-                                Choice("Unit", line.unit, listOf("kg", "L", "item")) {
-                                    line.unit = it
-                                    line.verified = false
-                                }
-                                Tick("I checked this item", line.verified) { line.verified = it }
-                                TextButton(
-                                    enabled = !busy,
-                                    onClick = { rows.remove(line) },
-                                    shape = MaterialTheme.shapes.small,
-                                ) {
-                                    Text("Remove item")
-                                }
+                                Text("Remove item")
                             }
                         }
                     }
-                    OutlinedButton(
-                        enabled = !busy,
-                        onClick = { rows.add(ReviewLine("", "", "")) },
-                        shape = MaterialTheme.shapes.small,
-                    ) {
-                        Text("Add missing item")
-                    }
-                    Field("Tax / discount adjustment (J$; negative for discount)", adjustment) {
-                        adjustment = it
-                        checked = false
-                    }
-                    val itemSum = runCatching {
-                        Money.sum(rows.map { Money.parse(it.total) })
-                    }
-                        .getOrNull()
-                    val reconciled = runCatching {
-                        itemSum != null &&
-                            ReceiptParser.reconciles(
-                                listOf(itemSum),
-                                Money.parse(adjustment, true),
-                                Money.parse(total),
-                            )
-                    }
-                        .getOrDefault(false)
-                    Text(
-                        if (reconciled) "Items + adjustment match the total."
-                        else "Items + adjustment do not yet match the total.",
-                        color =
-                            if (reconciled) MaterialTheme.colorScheme.onSurface
-                            else MaterialTheme.colorScheme.error,
-                    )
-                    if (itemSum != null) AmountRow("Detected item sum", itemSum)
-                    Text(
-                        "Prices are added only when reviewed items reconcile with no receipt-level adjustment. This prevents an unallocated tax or discount from giving a misleading price."
-                    )
                 }
-                Tick("I verified the total, date and currency are JMD", checked) { checked = it }
-                val possible =
-                    data.receipt.receipts.filter {
-                        it.fingerprint == draft.fingerprint ||
-                            it.merchant.equals(merchant.trim(), true) &&
-                                it.date == date &&
-                                it.totalMinor == runCatching { Money.parse(total) }.getOrNull()
-                    }
-                if (possible.isNotEmpty()) {
-                    Text(
-                        "Possible duplicate: ${possible.first().merchant} · ${possible.first().date}. Check your saved expenses first.",
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                    Tick("Save anyway: this is a separate purchase", duplicate) { duplicate = it }
-                }
-                Button(
-                    enabled = !busy && checked && (totalOnly || rows.all { it.verified }),
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        model.act(close) {
-                            model.repo.confirmReceipt(
-                                ConfirmedReceipt(
-                                    draft.id,
-                                    merchant,
-                                    branch,
-                                    parish,
-                                    LocalDate.parse(date),
-                                    Money.positive(total),
-                                    if (totalOnly) 0 else Money.parse(adjustment, true),
-                                    if (totalOnly) emptyList()
-                                    else
-                                        rows.map {
-                                            ConfirmedItem(
-                                                it.raw,
-                                                it.name,
-                                                it.quantity,
-                                                Money.parse(it.total),
-                                                it.size,
-                                                it.unit,
-                                                it.verified,
-                                            )
-                                        },
-                                    account,
-                                    key,
-                                    totalOnly,
-                                    duplicate,
-                                    linked.takeIf { it.isNotBlank() },
-                                    mapOf(
-                                            "Time" to time,
-                                            "Payment" to payment,
-                                            "Receipt number" to receiptNo,
-                                            "Transaction number" to transactionNo,
-                                            "Subtotal" to subtotal,
-                                            "Tax" to tax,
-                                            "Discount" to discount,
-                                        )
-                                        .filterValues { it.isNotBlank() },
-                                )
-                            )
-                        }
-                    },
-                    shape = MaterialTheme.shapes.small,
-                ) {
-                    Text(if (busy) "Saving…" else "Confirm and save")
-                }
-                if (draft.imageRef != null)
-                    OutlinedButton(
-                        enabled = !busy,
-                        onClick = { rescanPrompt = true },
-                        shape = MaterialTheme.shapes.small,
-                    ) {
-                        Text("Rescan saved photo")
-                    }
-                TextButton(
+                OutlinedButton(
                     enabled = !busy,
-                    onClick = { keepDraft() },
+                    onClick = { rows.add(ReviewLine("", "", "")) },
                     shape = MaterialTheme.shapes.small,
                 ) {
-                    Text("Save edits as draft")
+                    Text("Add missing item")
                 }
-                TextButton(
-                    enabled = !busy,
-                    onClick = {
-                        model.act(close) {
-                            model.repo.dao.deleteDraft(draft.id)
-                            draft.imageRef?.let { model.app.storage.deleteReceipt(it) }
-                        }
-                    },
-                    shape = MaterialTheme.shapes.small,
-                ) {
-                    Text("Discard draft")
+                Field("Tax / discount adjustment (J$; negative for discount)", adjustment) {
+                    adjustment = it
+                    checked = false
                 }
-                Text("Extracted text", style = MaterialTheme.typography.titleMedium)
+                val itemSum = runCatching {
+                    Money.sum(rows.map { Money.parse(it.total) })
+                }
+                    .getOrNull()
+                val reconciled = runCatching {
+                    itemSum != null &&
+                        ReceiptParser.reconciles(
+                            listOf(itemSum),
+                            Money.parse(adjustment, true),
+                            Money.parse(total),
+                        )
+                }
+                    .getOrDefault(false)
                 Text(
-                    draft.rawText.substringBefore("[Review edits]"),
-                    style = MaterialTheme.typography.bodySmall,
+                    if (reconciled) "Items + adjustment match the total."
+                    else "Items + adjustment do not yet match the total.",
+                    color =
+                        if (reconciled) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.error,
+                )
+                if (itemSum != null) AmountRow("Detected item sum", itemSum)
+                Text(
+                    "Prices are added only when reviewed items reconcile with no receipt-level adjustment. This prevents an unallocated tax or discount from giving a misleading price."
                 )
             }
+        }
+        val validReceipt =
+            merchant.isNotBlank() &&
+                runCatching { LocalDate.parse(date) }.isSuccess &&
+                runCatching { Money.positive(total) }.isSuccess &&
+                data.ledger.accounts.any { it.account.id == account }
+        if (!validReceipt)
+            Text("Use Edit details to add the missing store, date, total or payment account.")
+        Tick("I checked the items, total, date and JMD currency", checked) {
+            checked = it
+            rows.forEach { line -> line.verified = it }
+        }
+        val possible =
+            data.receipt.receipts.filter {
+                it.fingerprint == draft.fingerprint ||
+                    it.merchant.equals(merchant.trim(), true) &&
+                        it.date == date &&
+                        it.totalMinor == runCatching { Money.parse(total) }.getOrNull()
+            }
+        if (possible.isNotEmpty()) {
+            Text(
+                "Possible duplicate: ${possible.first().merchant} · ${possible.first().date}. Check your saved expenses first.",
+                color = MaterialTheme.colorScheme.error,
+            )
+            Tick("Save anyway: this is a separate purchase", duplicate) { duplicate = it }
+        }
+        Button(
+            enabled = !busy && validReceipt && checked && (totalOnly || rows.all { it.verified }),
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                model.act(close) {
+                    // Keep the display snapshot even when the ledger expense is total-only.
+                    model.repo.saveReviewDraft(draft.id, reviewEdits())
+                    model.repo.confirmReceipt(
+                        ConfirmedReceipt(
+                            draft.id,
+                            merchant,
+                            branch,
+                            parish,
+                            LocalDate.parse(date),
+                            Money.positive(total),
+                            if (totalOnly) 0 else Money.parse(adjustment, true),
+                            if (totalOnly) emptyList()
+                            else
+                                rows.map {
+                                    ConfirmedItem(
+                                        it.raw,
+                                        it.name,
+                                        it.quantity,
+                                        Money.parse(it.total),
+                                        it.size,
+                                        it.unit,
+                                        it.verified,
+                                    )
+                                },
+                            account,
+                            key,
+                            totalOnly,
+                            duplicate,
+                            linked.takeIf { it.isNotBlank() },
+                            mapOf(
+                                    "Time" to time,
+                                    "Payment" to payment,
+                                    "Receipt number" to receiptNo,
+                                    "Transaction number" to transactionNo,
+                                    "Subtotal" to subtotal,
+                                    "Tax" to tax,
+                                    "Discount" to discount,
+                                )
+                                .filterValues { it.isNotBlank() },
+                        )
+                    )
+                }
+            },
+            shape = MaterialTheme.shapes.small,
+        ) {
+            Text(if (busy) "Saving…" else "Confirm and save")
+        }
+        if (draft.imageRef != null)
+            OutlinedButton(
+                enabled = !busy,
+                onClick = { rescanPrompt = true },
+                shape = MaterialTheme.shapes.small,
+            ) {
+                Text("Rescan saved photo")
+            }
+        TextButton(
+            enabled = !busy,
+            onClick = { keepDraft() },
+            shape = MaterialTheme.shapes.small,
+        ) {
+            Text("Save edits as draft")
+        }
+        TextButton(
+            enabled = !busy,
+            onClick = {
+                model.act(close) {
+                    model.repo.dao.deleteDraft(draft.id)
+                    draft.imageRef?.let { model.app.storage.deleteReceipt(it) }
+                }
+            },
+            shape = MaterialTheme.shapes.small,
+        ) {
+            Text("Discard draft")
         }
     }
 }

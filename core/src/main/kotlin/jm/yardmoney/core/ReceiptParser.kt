@@ -12,6 +12,7 @@ data class SuggestedLine(
     val needsReview: Boolean = true,
     val unitPriceMinor: Long? = null,
     val confidence: String = "Check against photo",
+    val quantitySpecified: Boolean = false,
 )
 
 data class ReceiptSuggestion(
@@ -91,6 +92,7 @@ object ReceiptParser {
         var pending = ""
         var inSummary = false
         var pendingQty = "1"
+        var pendingQtySpecified = false
         var pendingUnit: Long? = null
         val warnings =
             mutableListOf(
@@ -136,6 +138,7 @@ object ReceiptParser {
                 qty.containsMatchIn(line) -> {
                     val q = qty.find(line)!!
                     val number = q.groupValues[1].replace(',', '.')
+                    pendingQtySpecified = true
                     val remainder = line.substring(q.range.last + 1)
                     val values =
                         Regex("[0-9][0-9,]*\\.[0-9]{2}")
@@ -151,10 +154,12 @@ object ReceiptParser {
                                 values.last(),
                                 unitPriceMinor = values.first(),
                                 confidence = "Quantity and extended price detected",
+                                quantitySpecified = true,
                             )
                         )
                         pending = ""
                         pendingQty = "1"
+                        pendingQtySpecified = false
                         pendingUnit = null
                     } else if (items.isNotEmpty() && pending.isBlank()) {
                         val previous = items.last()
@@ -171,6 +176,7 @@ object ReceiptParser {
                             items[items.lastIndex] =
                                 previous.copy(
                                     quantity = number,
+                                    quantitySpecified = true,
                                     unitPriceMinor = values.first(),
                                     raw = previous.raw + "\n" + line,
                                 )
@@ -190,6 +196,7 @@ object ReceiptParser {
                         Regex("\\s+(\\d+(?:\\.\\d+)?)\\s+([0-9][0-9,]*\\.[0-9]{2})$").find(n)
                     if (columns != null) {
                         pendingQty = columns.groupValues[1]
+                        pendingQtySpecified = true
                         pendingUnit =
                             runCatching { Money.parse(columns.groupValues[2]) }.getOrNull()
                         n = n.substring(0, columns.range.first).trim()
@@ -214,6 +221,7 @@ object ReceiptParser {
                                 quantity,
                                 amount(line),
                                 unitPriceMinor = pendingUnit,
+                                quantitySpecified = prefixQty != null || pendingQtySpecified,
                                 confidence =
                                     if (pending.isBlank()) "Price matched on the same line"
                                     else "Wrapped name / price matched; verify",
@@ -222,6 +230,7 @@ object ReceiptParser {
                     }
                     pending = ""
                     pendingQty = "1"
+                    pendingQtySpecified = false
                     pendingUnit = null
                 }
                 line.any(Char::isLetter) && index > 0 -> {

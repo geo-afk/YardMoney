@@ -24,12 +24,6 @@ class ReceiptReader(private val app: YardMoneyApplication) {
                 bitmap.recycle()
             }
         progress("Saving private review draft…")
-        val image = app.storage.saveReceipt(FinanceRepository.id(), bytes)
-        return try {
-            app.repository.saveDraft(annotated, image, FinanceRepository.fingerprint(bytes))
-        } catch (e: Exception) {
-            app.storage.deleteReceipt(image)
-            throw e
-        }
+        return app.repository.saveScannedDraft(annotated, FinanceRepository.fingerprint(bytes))
     }
 }

@@ -72,6 +72,14 @@ internal fun ReservationEditor(
             }
         },
         close = close,
+        keyValue = amount,
+        dirty =
+            name != (original?.name ?: "") ||
+                amount != (original?.amountMinor?.let(Money::input) ?: "") ||
+                due != (original?.dueDate ?: "") ||
+                account != (original?.accountId ?: initialAccountId ?: "") ||
+                repeat != "ONCE" ||
+                kind != (original?.kind ?: "BILL"),
     ) {
         IdentityBadge(categoryIdentity(name.ifBlank { "Bills" }))
         Field("Name", name) { name = it }
@@ -200,6 +208,12 @@ internal fun LimitEditor(
             }
         },
         close = close,
+        keyValue = amount,
+        dirty =
+            category != (existing?.category ?: "Groceries") ||
+                amount != (existing?.limitMinor?.let(Money::input) ?: "") ||
+                bucket != (existing?.bucket ?: "NEEDS") ||
+                account != (if (existing != null) existing.accountId ?: "" else scope ?: ""),
     ) {
         IdentityPicker("Category", category, categories, allowCustom = true) { category = it }
         MoneyField("Limit per period (J$)", amount, prominent = true) { amount = it }

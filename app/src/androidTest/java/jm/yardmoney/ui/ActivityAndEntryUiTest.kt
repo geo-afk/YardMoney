@@ -21,7 +21,7 @@ class ActivityAndEntryUiTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
-    fun returningToTopKeepsFormAndSecondLongPullClosesIt() {
+    fun returningToTopKeepsFormAndPullsVisitEveryStageBeforeDismissal() {
         var closed by mutableStateOf(false)
         compose.setContent {
             YardTheme {
@@ -42,43 +42,40 @@ class ActivityAndEntryUiTest {
                     }
             }
         }
-        val titleTop = compose.onNodeWithText("Record money").fetchSemanticsNode().boundsInRoot.top
+        fun stage(name: String) =
+            compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, name))
         compose.onNodeWithText("Detail 12").performScrollTo()
         compose.onNodeWithTag("money-entry-scroll").performTouchInput {
             swipeDown(durationMillis = 300)
         }
-        compose.waitForIdle()
-        compose.onNodeWithText("Record money").assertIsDisplayed()
-        assertEquals(
-            titleTop,
-            compose.onNodeWithText("Record money").fetchSemanticsNode().boundsInRoot.top,
-            1f,
-        )
-        // ScrollTo a child aligns its label, not the padded scroll container's origin.
+        stage("Full").assertExists()
         compose.onNodeWithTag("money-entry-scroll").performSemanticsAction(
             SemanticsActions.ScrollBy
         ) {
             it(0f, -100000f)
         }
-        compose.waitForIdle()
-        assertEquals(
-            0f,
-            compose
-                .onNodeWithTag("money-entry-scroll")
-                .fetchSemanticsNode()
-                .config[SemanticsProperties.VerticalScrollAxisRange]
-                .value(),
-            1f,
-        )
-        compose.onNodeWithTag("money-entry-scroll").performTouchInput {
-            swipe(Offset(width * .5f, height * .2f), Offset(width * .5f, height * .25f), 400)
+        // Continue the pointer beyond the handle while the sheet follows it to the next anchor.
+        fun pullToNextStage() {
+            val body =
+                compose.onNodeWithTag("money-entry-scroll").fetchSemanticsNode().boundsInRoot.height
+            compose.onNodeWithTag("edit-sheet-handle").performTouchInput {
+                swipe(Offset(width / 2f, 4f), Offset(width / 2f, height + body * .8f - 8f), 600)
+            }
+            compose.waitForIdle()
         }
-        compose.waitForIdle()
-        compose.onNodeWithText("Save expense").assertIsDisplayed()
-        compose.onNodeWithTag("money-entry-scroll").performTouchInput {
-            swipeDown(durationMillis = 500)
+        pullToNextStage()
+        stage("Half").assertExists()
+        compose.runOnIdle { assertFalse(closed) }
+        pullToNextStage()
+        stage("Peek").assertExists()
+        compose.runOnIdle { assertFalse(closed) }
+        compose.onNodeWithTag("edit-sheet-handle").performTouchInput {
+            swipe(Offset(width / 2f, 4f), Offset(width / 2f, height - 8f), 600)
         }
-        compose.waitForIdle()
+        compose.onNodeWithText("Keep editing").performClick()
+        stage("Peek").assertExists()
+        stage("Peek").performSemanticsAction(SemanticsActions.Dismiss)
+        compose.onNodeWithText("Discard").performClick()
         compose.onNodeWithText("Record money").assertDoesNotExist()
     }
 

@@ -3,6 +3,7 @@ package jm.yardmoney.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.unit.dp
 import java.math.BigDecimal
 import jm.yardmoney.AppModel
@@ -12,23 +13,49 @@ import jm.yardmoney.data.Profile
 
 @Composable
 internal fun BudgetForm(model: AppModel, p: Profile, busy: Boolean, close: () -> Unit) {
-    val fields = remember {
-        listOf(p.needsBp, p.wantsBp, p.savingsBp).map {
-            mutableStateOf(
-                BigDecimal(it).divide(BigDecimal(100)).stripTrailingZeros().toPlainString()
-            )
+    var needs by rememberSaveable {
+        mutableStateOf(
+            BigDecimal(p.needsBp).divide(BigDecimal(100)).stripTrailingZeros().toPlainString()
+        )
+    }
+    var wants by rememberSaveable {
+        mutableStateOf(
+            BigDecimal(p.wantsBp).divide(BigDecimal(100)).stripTrailingZeros().toPlainString()
+        )
+    }
+    var savings by rememberSaveable {
+        mutableStateOf(
+            BigDecimal(p.savingsBp).divide(BigDecimal(100)).stripTrailingZeros().toPlainString()
+        )
+    }
+    val fields =
+        listOf(
+            rememberUpdatedState(needs),
+            rememberUpdatedState(wants),
+            rememberUpdatedState(savings),
+        )
+    fun change(index: Int, value: String) {
+        when (index) {
+            0 -> needs = value
+            1 -> wants = value
+            else -> savings = value
         }
     }
     var preview by remember { mutableStateOf<BudgetSplit?>(null) }
     fun basis() = fields.map { BigDecimal(it.value).multiply(BigDecimal(100)).intValueExact() }
-    AlertDialog(
+    EditFormSheet(
+        titleText = "Budget percentages",
+        busy = busy,
+        keyValue = "$needs / $wants / $savings",
+        dirty =
+            runCatching { basis() != listOf(p.needsBp, p.wantsBp, p.savingsBp) }.getOrDefault(true),
         onDismissRequest = { if (!busy) close() },
         title = { Text("Budget percentages") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 listOf("Needs %", "Wants %", "Savings %").forEachIndexed { i, label ->
                     Field(label, fields[i].value) {
-                        fields[i].value = it
+                        change(i, it)
                         preview = null
                     }
                 }
@@ -53,11 +80,13 @@ internal fun BudgetForm(model: AppModel, p: Profile, busy: Boolean, close: () ->
                     TextButton(
                         onClick = {
                             split.values.forEachIndexed { i, value ->
-                                fields[i].value =
+                                change(
+                                    i,
                                     BigDecimal(value)
                                         .divide(BigDecimal(100))
                                         .stripTrailingZeros()
-                                        .toPlainString()
+                                        .toPlainString(),
+                                )
                             }
                             preview = null
                         },
@@ -88,7 +117,7 @@ internal fun BudgetForm(model: AppModel, p: Profile, busy: Boolean, close: () ->
         dismissButton = {
             TextButton(
                 enabled = !busy,
-                onClick = close,
+                onClick = LocalEditDismiss.current,
                 shape = MaterialTheme.shapes.small,
             ) {
                 Text("Cancel")

@@ -19,6 +19,9 @@ internal data class CatalogItem(
     val price: Long?,
     val category: String,
     val date: String,
+    val purchases: Int = 0,
+    val purchaseKey: String? = null,
+    val sourceKeys: List<String> = listOf(normalizedShopName(name)),
 ) {
     val searchKey = normalizedShopName(name)
 }
@@ -28,29 +31,84 @@ internal fun shopCatalog(data: FinanceSnapshot): List<CatalogItem> {
     val receipts = data.receipt.receipts.associateBy { it.id }
     val observations = data.receipt.prices.associateBy { it.itemId }
     val transactions = data.ledger.transactions.associateBy { it.id }
-    return data.receiptItems
-        .filter { it.confirmed && it.receiptId in receipts && it.confirmedName.isNotBlank() }
-        .map { item ->
-            val receipt = receipts.getValue(item.receiptId)
-            val price = observations[item.id]
+    val scanned =
+        data.receiptItems
+            .filter { it.confirmed && it.receiptId in receipts && it.confirmedName.isNotBlank() }
+            .map { item ->
+                val receipt = receipts.getValue(item.receiptId)
+                val price = observations[item.id]
+                CatalogItem(
+                    item.confirmedName.trim(),
+                    price?.productKey,
+                    price?.packPriceMinor
+                        ?: runCatching {
+                            Money.unitPrice(item.totalMinor, Quantity.parse(item.quantity))
+                        }
+                            .getOrNull(),
+                    transactions[receipt.transactionId]?.category?.takeIf { it.isNotBlank() }
+                        ?: "Other",
+                    receipt.date,
+                    1,
+                    receipt.id,
+                )
+            }
+
+    val manual =
+        data.shopping.items.map { item ->
             CatalogItem(
-                item.confirmedName.trim(),
-                price?.productKey,
-                price?.packPriceMinor
-                    ?: runCatching {
-                        Money.unitPrice(item.totalMinor, Quantity.parse(item.quantity))
-                    }
-                        .getOrNull(),
-                transactions[receipt.transactionId]?.category?.takeIf { it.isNotBlank() }
-                    ?: "Other",
-                receipt.date,
+                item.name,
+                item.productKey,
+                item.manualPriceMinor,
+                item.category,
+                data.shopping.lists.find { it.id == item.listId }?.createdDate.orEmpty(),
             )
+        }
+    return (scanned + manual)
+        .groupBy { it.searchKey }
+        .values
+        .map { rows ->
+            rows
+                .maxWith(compareBy<CatalogItem> { it.date }.thenBy { it.name })
+                .copy(purchases = rows.mapNotNull { it.purchaseKey }.distinct().size)
+        }
+        .sortedBy { it.searchKey }
+}
+
+internal data class CatalogCorrection(
+    val name: String,
+    val price: Long?,
+    val category: String,
+    val deleted: Boolean = false,
+)
+
+internal fun correctedShopCatalog(
+    catalog: List<CatalogItem>,
+    corrections: Map<String, CatalogCorrection>,
+): List<CatalogItem> =
+    catalog
+        .mapNotNull { item ->
+            val correction = corrections[item.sourceKeys.first()]
+            when {
+                correction?.deleted == true -> null
+                correction != null ->
+                    item.copy(
+                        name = correction.name,
+                        price = correction.price,
+                        category = correction.category,
+                    )
+                else -> item
+            }
         }
         .groupBy { it.searchKey }
         .values
-        .map { rows -> rows.maxWith(compareBy<CatalogItem> { it.date }.thenBy { it.name }) }
+        .map { rows ->
+            val latest = rows.maxBy { it.date }
+            latest.copy(
+                sourceKeys = (latest.sourceKeys + rows.flatMap { it.sourceKeys }).distinct(),
+                purchases = rows.sumOf { it.purchases },
+            )
+        }
         .sortedBy { it.searchKey }
-}
 
 internal fun searchShopCatalog(catalog: List<CatalogItem>, query: String): List<CatalogItem> {
     val words = normalizedShopName(query).split(' ').filter { it.isNotBlank() }
@@ -60,12 +118,47 @@ internal fun searchShopCatalog(catalog: List<CatalogItem>, query: String): List<
 internal fun offerNewShopItem(catalog: List<CatalogItem>, query: String) =
     normalizedShopName(query).isNotEmpty() && searchShopCatalog(catalog, query).isEmpty()
 
-internal data class ShopReceiptLine(val item: ShoppingItem, val price: Long?, val total: Long?)
+internal data class ShopReceiptLine(
+    val item: ShoppingItem,
+    val price: Long?,
+    val total: Long?,
+    val quantitySpecified: Boolean = true,
+)
+
+// Derive a unit price only from an actually captured quantity; implicit parser defaults
+// must not turn an unknown quantity into an invented unit price.
+internal fun capturedReceiptLine(id: String, line: SuggestedLine): ShopReceiptLine {
+    val price =
+        line.unitPriceMinor
+            ?: line.totalMinor
+                ?.takeIf { line.quantitySpecified }
+                ?.let {
+                    runCatching { Money.unitPrice(it, Quantity.parse(line.quantity)) }.getOrNull()
+                }
+    return ShopReceiptLine(
+        ShoppingItem(
+            id,
+            "",
+            line.name,
+            line.quantity,
+            null,
+            price,
+            false,
+            category = "Not specified",
+        ),
+        price,
+        line.totalMinor,
+        quantitySpecified = line.quantitySpecified,
+    )
+}
 
 internal data class ShopReceiptModel(
     val name: String,
     val date: String?,
     val lines: List<ShopReceiptLine>,
+    val actualTotal: Long? = null,
+    val scanned: Boolean = false,
+    val recordedSubtotal: Long? = null,
 ) {
     val subtotal = Money.sum(lines.mapNotNull { it.total })
     val missing = lines.count { it.total == null }

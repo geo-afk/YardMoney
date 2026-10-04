@@ -1,7 +1,9 @@
 package jm.yardmoney.ui
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.material.icons.Icons
@@ -12,10 +14,13 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
@@ -294,48 +299,85 @@ internal fun CategoryLimits(
             "Set your first limit to see spending and the amount left at a glance.",
             icon = Icons.Default.Tune,
         )
-    else
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(250.dp),
-            modifier =
-                Modifier.fillMaxWidth().height((data.limits.size * 235).coerceAtMost(480).dp),
-            verticalArrangement = Arrangement.spacedBy(YardSpace.md),
-            horizontalArrangement = Arrangement.spacedBy(YardSpace.md),
-        ) {
-            items(data.limits, key = { it.id }) { limit ->
-                val accountTxIds =
-                    limit.accountId?.let { accountId ->
-                        data.accountEntries
-                            .filter { it.accountId == accountId }
-                            .map { it.transactionId }
-                            .toSet()
-                    }
-                val used =
-                    Money.sum(
-                        data.splits
-                            .filter {
-                                it.transactionId in ids &&
-                                    (accountTxIds == null || it.transactionId in accountTxIds) &&
-                                    it.bucket == limit.bucket &&
-                                    it.category.equals(limit.category, true)
-                            }
-                            .map { it.amountMinor }
-                    )
-                ProgressMoneyCard(
-                    limit.category,
-                    limit.bucket.lowercase().replaceFirstChar { it.titlecase() } +
-                        " · " +
-                        (data.ledger.accounts
-                            .find { it.account.id == limit.accountId }
-                            ?.account
-                            ?.name ?: "All accounts"),
-                    used,
-                    limit.limitMinor,
-                    categoryIdentity(limit.category),
-                    onClick = { edit(limit) },
+    else {
+        var expanded by rememberSaveable { mutableStateOf(listOf<String>()) }
+        Row {
+            TextButton(onClick = { expanded = data.limits.map { it.id } }) { Text("Expand all") }
+            TextButton(onClick = { expanded = emptyList() }) { Text("Collapse all") }
+        }
+        data.limits.forEach { limit ->
+            val accountTxIds =
+                limit.accountId?.let { accountId ->
+                    data.accountEntries
+                        .filter { it.accountId == accountId }
+                        .map { it.transactionId }
+                        .toSet()
+                }
+            val used =
+                Money.sum(
+                    data.splits
+                        .filter {
+                            it.transactionId in ids &&
+                                (accountTxIds == null || it.transactionId in accountTxIds) &&
+                                it.bucket == limit.bucket &&
+                                it.category.equals(limit.category, true)
+                        }
+                        .map { it.amountMinor }
                 )
+            val open = limit.id in expanded
+            val angle by
+                androidx.compose.animation.core.animateFloatAsState(
+                    if (open) 180f else 0f,
+                    LocalMotion.current.floatSpec(),
+                    label = "Category chevron",
+                )
+            Card(
+                Modifier.fillMaxWidth()
+                    .animateContentSize(
+                        androidx.compose.animation.core.tween(LocalMotion.current.duration())
+                    )
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clickable {
+                                expanded = if (open) expanded - limit.id else expanded + limit.id
+                            }
+                            .semantics { stateDescription = if (open) "Expanded" else "Collapsed" },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IdentityBadge(categoryIdentity(limit.category))
+                        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                            Text(limit.category, style = MaterialTheme.typography.titleMedium)
+                            Text("${Money.format(used)} / ${Money.format(limit.limitMinor)}")
+                        }
+                        Icon(Icons.Default.ExpandMore, "Toggle category", Modifier.rotate(angle))
+                    }
+                    LinearProgressIndicator(
+                        progress = {
+                            if (limit.limitMinor > 0)
+                                (used.toFloat() / limit.limitMinor).coerceIn(0f, 1f)
+                            else 0f
+                        },
+                        modifier = Modifier.fillMaxWidth().height(4.dp),
+                    )
+                    if (open) {
+                        Text(
+                            limit.bucket.lowercase() +
+                                " · " +
+                                (data.ledger.accounts
+                                    .find { it.account.id == limit.accountId }
+                                    ?.account
+                                    ?.name ?: "All accounts")
+                        )
+                        Text("Remaining: ${Money.format(limit.limitMinor - used)}")
+                        TextButton(onClick = { edit(limit) }) { Text("Edit category limit") }
+                    }
+                }
             }
         }
+    }
 }
 
 internal data class IdentityOption(
@@ -391,19 +433,24 @@ internal fun IdentityPicker(
         }
     }
     if (open)
-        ModalBottomSheet(
-            onDismissRequest = { open = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            sheetMaxWidth = 680.dp,
+        StagedEditSheet(
+            "Choose $label",
+            option.label,
+            LocalSaving.current,
+            allowCustom &&
+                query.isNotBlank() &&
+                options.none { it.label.equals(query.trim(), true) },
+            { open = false },
+            scrollContent = false,
         ) {
             Column(
-                Modifier.fillMaxWidth().fillMaxHeight(.82f).padding(horizontal = YardSpace.xl),
+                Modifier.fillMaxWidth().fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(YardSpace.lg),
             ) {
                 SectionHeading(
                     "Choose $label",
                     action = {
-                        IconButton(onClick = { open = false }) {
+                        IconButton(onClick = LocalEditDismiss.current) {
                             Icon(Icons.Default.Close, "Close $label picker")
                         }
                     },

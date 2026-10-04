@@ -48,6 +48,21 @@ internal fun TransactionForm(
     var goal by rememberSaveable { mutableStateOf("") }
     var refund by rememberSaveable { mutableStateOf("") }
     var splits by rememberSaveable { mutableStateOf("") }
+    val originalFields = rememberSaveable {
+        listOf(
+            kind,
+            amount,
+            date,
+            description,
+            category,
+            bucket,
+            account,
+            destination,
+            goal,
+            refund,
+            splits,
+        )
+    }
     val accounts = data.ledger.accounts.associate { it.account.id to it.account.name }
     val accountOptions =
         data.ledger.accounts.map {
@@ -97,6 +112,21 @@ internal fun TransactionForm(
         busy = busy,
         canSave = canSave,
         close = close,
+        keyValue = amount,
+        dirty =
+            listOf(
+                kind,
+                amount,
+                date,
+                description,
+                category,
+                bucket,
+                account,
+                destination,
+                goal,
+                refund,
+                splits,
+            ) != originalFields,
         save = {
             model.act(close) {
                 val pieces =

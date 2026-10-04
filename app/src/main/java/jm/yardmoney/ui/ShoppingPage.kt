@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -49,8 +50,7 @@ internal fun ShoppingPage(
     var discard by rememberSaveable { mutableStateOf(false) }
     var replaceDraft by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val catalog =
-        remember(data.receipt, data.receiptItems, data.ledger.transactions) { shopCatalog(data) }
+    val catalog = rememberSavedCatalog(remember(data) { shopCatalog(data) })
     val groceryRemaining =
         remember(data.limits, data.splits, data.ledger.transactions, data.ledger.profile) {
             groceryBudgetRemaining(data, model.repo.today.toString())
@@ -87,7 +87,11 @@ internal fun ShoppingPage(
                     safe.safeMinor,
                     groceryRemaining = groceryRemaining,
                     change = drafts::store,
-                    back = { discard = true },
+                    // The shared sheet has already confirmed discard; avoid a second prompt.
+                    back = {
+                        drafts.store(null)
+                        route = "home"
+                    },
                     save = {
                         val current = draft
                         model.act(
@@ -196,6 +200,23 @@ internal fun ShoppingPage(
                         }
                     },
                 )
+            route == "items" || route == "receipts" ->
+                LazyColumn(
+                    Modifier.widthIn(max = 840.dp).fillMaxSize(),
+                    contentPadding = PaddingValues(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    item {
+                        ShopHeading(
+                            if (route == "items") "Saved Items" else "Scanned receipts",
+                            ::back,
+                        )
+                    }
+                    if (route == "items") {
+                        item { SavedItemsSection(data, busy) }
+                        item { ShopPriceNotebook(data.receipt.prices) }
+                    } else item { ScannedReceiptsSection(model, data, busy) }
+                }
             route == "lists" ->
                 LazyColumn(
                     Modifier.widthIn(max = 840.dp).fillMaxSize(),
@@ -269,22 +290,26 @@ internal fun ShoppingPage(
                         }
                     }
                     item {
-                        MoneyCard {
-                            IdentityBadge(MoneyIdentity(Icons.Default.PriceCheck, 0xFF007F91))
-                            Text(
-                                "Your receipts, working for you",
-                                style = MaterialTheme.typography.titleLarge,
-                            )
-                            Text(
-                                "${catalog.size} unique items in this account scope. Choose a dated receipt price or enter your own estimate."
-                            )
-                            Text(
-                                "Checking off a list never changes your account balance. Record the purchase in Activity.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
+                        ShopEntryCard(
+                            "Saved Items",
+                            "${catalog.size} saved • search, browse and edit",
+                            MoneyIdentity(Icons.Default.PriceCheck, 0xFF007F91),
+                            badge = catalog.size,
+                        ) {
+                            route = "items"
                         }
                     }
-                    item { ShopPriceNotebook(data.receipt.prices) }
+                    item {
+                        val count = data.receipt.receipts.size + data.receipt.drafts.size
+                        ShopEntryCard(
+                            "Scanned receipts",
+                            "$count saved • view your purchases",
+                            MoneyIdentity(Icons.AutoMirrored.Filled.ReceiptLong, 0xFFAD4324),
+                            badge = count,
+                        ) {
+                            route = "receipts"
+                        }
+                    }
                 }
         }
     }
@@ -441,11 +466,9 @@ internal fun ShopEditor(
     save: () -> Unit,
     groceryRemaining: Long? = null,
 ) {
-    val state = rememberBottomSheetScaffoldState()
-    val scope = rememberCoroutineScope()
-    BackHandler(state.bottomSheetState.currentValue == SheetValue.Expanded) {
-        scope.launch { state.bottomSheetState.partialExpand() }
-    }
+    val originalDraft = rememberSaveable(draft.list.id) { draft.toString() }
+    var previewExpanded by rememberSaveable { mutableStateOf(false) }
+    BackHandler(previewExpanded) { previewExpanded = false }
     val receipt = remember(draft) { shopReceipt(draft.list, draft.items) }
     var editError by rememberSaveable { mutableStateOf<String?>(null) }
     fun publish(items: List<ShoppingItem>) {
@@ -456,172 +479,199 @@ internal fun ShopEditor(
             }
             .onFailure { editError = it.message ?: "Check the quantity and price." }
     }
-    BoxWithConstraints(Modifier.widthIn(max = 840.dp).fillMaxSize().imePadding()) {
-        val compactHeight = maxHeight < 360.dp
-        val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
-        val peekHeight = (if (compactHeight) 64.dp else 96.dp) + 64.dp * (fontScale - 1f)
-        val receiptHeight = if (compactHeight) maxHeight else maxHeight * .85f
-        BottomSheetScaffold(
-            scaffoldState = state,
-            sheetPeekHeight = peekHeight,
-            sheetDragHandle = null,
-            sheetContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            sheetContent = {
-                Column(
-                    Modifier.fillMaxWidth().heightIn(max = receiptHeight).widthIn(max = 840.dp)
-                ) {
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                if (state.bottomSheetState.currentValue == SheetValue.Expanded)
-                                    state.bottomSheetState.partialExpand()
-                                else state.bottomSheetState.expand()
-                            }
-                        },
-                        modifier =
-                            Modifier.fillMaxWidth().heightIn(min = peekHeight).semantics {
-                                contentDescription = "Expand or collapse receipt preview"
-                            },
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ReceiptLong, null)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Live receipt", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "${Money.format(receipt.subtotal)}${if(receipt.missing > 0) " • partial estimate" else " • estimated total"}"
-                            )
-                        }
-                        Icon(
-                            if (state.bottomSheetState.currentValue == SheetValue.Expanded)
-                                Icons.Default.ExpandMore
-                            else Icons.Default.ExpandLess,
-                            null,
-                        )
-                    }
+    StagedEditSheet(
+        if (draft.replacing) "Edit Shopping List" else "New Shopping List",
+        "${draft.list.name} · ${Money.format(receipt.subtotal)}",
+        busy,
+        draft.toString() != originalDraft,
+        back,
+        scrollContent = false,
+    ) {
+        val dismiss = LocalEditDismiss.current
+        BoxWithConstraints(Modifier.widthIn(max = 840.dp).fillMaxSize().imePadding()) {
+            val compactHeight = maxHeight < 360.dp
+            val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+            val peekHeight = (if (compactHeight) 64.dp else 96.dp) + 64.dp * (fontScale - 1f)
+            val receiptHeight = if (compactHeight) maxHeight else maxHeight * .85f
+            ShopReceiptScaffold(
+                if (previewExpanded) receiptHeight else peekHeight,
+                sheetContent = {
                     Column(
-                        Modifier.weight(1f, fill = false)
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 20.dp)
-                            .padding(bottom = 20.dp)
+                        Modifier.fillMaxWidth().heightIn(max = receiptHeight).widthIn(max = 840.dp)
                     ) {
-                        ShopReceipt(receipt)
-                    }
-                }
-            },
-        ) { padding ->
-            LazyColumn(
-                Modifier.widthIn(max = 840.dp).fillMaxSize(),
-                contentPadding =
-                    PaddingValues(
-                        start = 20.dp,
-                        end = 20.dp,
-                        top = 12.dp,
-                        bottom = padding.calculateBottomPadding() + 24.dp,
-                    ),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                item {
-                    ShopHeading(
-                        if (draft.replacing) "Edit Shopping List" else "New Shopping List",
-                        back,
-                    )
-                }
-                item {
-                    OutlinedTextField(
-                        draft.list.name,
-                        { change(draft.copy(list = draft.list.copy(name = it.take(120)))) },
-                        label = { Text("List name") },
-                        isError = draft.list.name.isBlank(),
-                        supportingText = {
-                            Text(
-                                if (draft.list.name.isBlank()) "A name is required"
-                                else "${draft.list.name.length}/120"
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.small,
-                    )
-                }
-                item {
-                    Button(
-                        save,
-                        enabled = !busy && draft.list.name.isNotBlank() && draft.items.isNotEmpty(),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    ) {
-                        Icon(Icons.Default.Check, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (busy) "Saving…" else "Save shopping list")
-                    }
-                }
-                item {
-                    ShopCatalogPicker(catalog, busy) { item ->
-                        val old =
-                            draft.items.find {
-                                normalizedShopName(it.name) == normalizedShopName(item.name)
+                        TextButton(
+                            onClick = {
+                                previewExpanded = !previewExpanded
+                            },
+                            modifier =
+                                Modifier.fillMaxWidth().heightIn(min = peekHeight).semantics {
+                                    contentDescription = "Expand or collapse receipt preview"
+                                },
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ReceiptLong, null)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Live receipt", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "${Money.format(receipt.subtotal)}${if(receipt.missing > 0) " • partial estimate" else " • estimated total"}"
+                                )
                             }
-                        val combined = old?.let {
-                            Quantity.parse(it.quantity).add(Quantity.parse(item.quantity))
+                            Icon(
+                                if (previewExpanded) Icons.Default.ExpandMore
+                                else Icons.Default.ExpandLess,
+                                null,
+                            )
                         }
-                        if (combined != null && combined > BigDecimal("1000000")) {
-                            editError = "Quantity cannot exceed one million."
-                            return@ShopCatalogPicker
+                        Column(
+                            Modifier.weight(1f, fill = false)
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 20.dp)
+                                .padding(bottom = 20.dp)
+                        ) {
+                            ShopReceipt(receipt)
                         }
-                        val items =
-                            if (old != null)
-                                draft.items.map {
-                                    if (it.id == old.id)
-                                        it.copy(
-                                            quantity =
-                                                Quantity.parse(it.quantity)
-                                                    .add(Quantity.parse(item.quantity))
-                                                    .stripTrailingZeros()
-                                                    .toPlainString()
-                                        )
-                                    else it
+                    }
+                },
+            ) { padding ->
+                LazyColumn(
+                    Modifier.widthIn(max = 840.dp).fillMaxSize().testTag("shop-editor-list"),
+                    contentPadding =
+                        PaddingValues(
+                            start = 20.dp,
+                            end = 20.dp,
+                            top = 12.dp,
+                            bottom = padding.calculateBottomPadding() + 24.dp,
+                        ),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    item {
+                        ShopHeading(
+                            if (draft.replacing) "Edit Shopping List" else "New Shopping List",
+                            dismiss,
+                        )
+                    }
+                    item {
+                        OutlinedTextField(
+                            draft.list.name,
+                            { change(draft.copy(list = draft.list.copy(name = it.take(120)))) },
+                            label = { Text("List name") },
+                            isError = draft.list.name.isBlank(),
+                            supportingText = {
+                                Text(
+                                    if (draft.list.name.isBlank()) "A name is required"
+                                    else "${draft.list.name.length}/120"
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.small,
+                        )
+                    }
+                    item {
+                        Button(
+                            save,
+                            enabled =
+                                !busy && draft.list.name.isNotBlank() && draft.items.isNotEmpty(),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        ) {
+                            Icon(Icons.Default.Check, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (busy) "Saving…" else "Save shopping list")
+                        }
+                    }
+                    item {
+                        ShopCatalogPicker(catalog, busy) { item ->
+                            val old =
+                                draft.items.find {
+                                    normalizedShopName(it.name) == normalizedShopName(item.name)
                                 }
-                            else draft.items + item.copy(listId = draft.list.id)
-                        publish(items)
+                            val combined = old?.let {
+                                Quantity.parse(it.quantity).add(Quantity.parse(item.quantity))
+                            }
+                            if (combined != null && combined > BigDecimal("1000000")) {
+                                editError = "Quantity cannot exceed one million."
+                                return@ShopCatalogPicker
+                            }
+                            val items =
+                                if (old != null)
+                                    draft.items.map {
+                                        if (it.id == old.id)
+                                            it.copy(
+                                                quantity =
+                                                    Quantity.parse(it.quantity)
+                                                        .add(Quantity.parse(item.quantity))
+                                                        .stripTrailingZeros()
+                                                        .toPlainString()
+                                            )
+                                        else it
+                                    }
+                                else draft.items + item.copy(listId = draft.list.id)
+                            publish(items)
+                        }
                     }
-                }
-                if (editError != null)
+                    if (editError != null)
+                        item {
+                            Text(
+                                editError!!,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier =
+                                    Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                            )
+                        }
                     item {
-                        Text(
-                            editError!!,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        SectionHeading(
+                            "In your basket",
+                            subtitle =
+                                "${shopCount(draft.items.size, "item")} • duplicate additions increase quantity",
                         )
                     }
-                item {
-                    SectionHeading(
-                        "In your basket",
-                        subtitle =
-                            "${shopCount(draft.items.size, "item")} • duplicate additions increase quantity",
-                    )
-                }
-                if (draft.items.isEmpty())
-                    item {
-                        EmptyState(
-                            "Your basket is open",
-                            "Search your receipts above, or add something new. Prices are optional.",
-                            icon = Icons.Default.AddShoppingCart,
+                    if (draft.items.isEmpty())
+                        item {
+                            EmptyState(
+                                "Your basket is open",
+                                "Search your receipts above, or add something new. Prices are optional.",
+                                icon = Icons.Default.AddShoppingCart,
+                            )
+                        }
+                    items(draft.items, key = { it.id }) { item ->
+                        ShopItemRow(
+                            item,
+                            busy,
+                            toggle = null,
+                            update = { updated ->
+                                val next =
+                                    draft.items.map { if (it.id == updated.id) updated else it }
+                                publish(next)
+                            },
+                            remove = {
+                                change(
+                                    draft.copy(items = draft.items.filterNot { it.id == item.id })
+                                )
+                            },
                         )
                     }
-                items(draft.items, key = { it.id }) { item ->
-                    ShopItemRow(
-                        item,
-                        busy,
-                        toggle = null,
-                        update = { updated ->
-                            val next = draft.items.map { if (it.id == updated.id) updated else it }
-                            publish(next)
-                        },
-                        remove = {
-                            change(draft.copy(items = draft.items.filterNot { it.id == item.id }))
-                        },
-                    )
+                    item { ShopAffordability(receipt, safeMinor, groceryRemaining) }
                 }
-                item { ShopAffordability(receipt, safeMinor, groceryRemaining) }
             }
+        }
+    }
+}
+
+// A fixed preview panel leaves the list viewport above it unobstructed. A second nested
+// draggable scaffold can expand during BringIntoView and intercept basket button taps.
+@Composable
+private fun ShopReceiptScaffold(
+    previewHeight: Dp,
+    sheetContent: @Composable () -> Unit,
+    content: @Composable (PaddingValues) -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f).fillMaxWidth()) { content(PaddingValues(0.dp)) }
+        Surface(
+            Modifier.fillMaxWidth().height(previewHeight),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = MaterialTheme.shapes.large,
+        ) {
+            sheetContent()
         }
     }
 }
@@ -769,7 +819,17 @@ internal fun ShopItemFields(
         require(category.trim().length in 1..120) { "Choose a category (up to 120 characters)." }
         entered
     }
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    StagedEditSheet(
+        "Edit item",
+        "$name · ${price.ifBlank { "Not specified" }}",
+        busy,
+        encoded.isNotBlank(),
+        {
+            formState.clearForm(formKey)
+            cancel()
+        },
+    ) {
+        val requestDismiss = LocalEditDismiss.current
         OutlinedTextField(
             name,
             { formState.formField(formKey, "name", it.take(120)) },
@@ -837,12 +897,7 @@ internal fun ShopItemFields(
             ) {
                 Text(if (original == null) "Add to list" else "Update item")
             }
-            TextButton(
-                onClick = {
-                    formState.clearForm(formKey)
-                    cancel()
-                }
-            ) {
+            TextButton(onClick = requestDismiss) {
                 Text("Cancel")
             }
         }
@@ -1190,7 +1245,11 @@ internal fun ShopDetail(
         }
     }
     if (renaming)
-        AlertDialog(
+        EditFormSheet(
+            busy = busy,
+            dirty = newName != list.name,
+            keyValue = newName,
+            titleText = "Rename list",
             onDismissRequest = { renaming = false },
             title = { Text("Rename list") },
             text = {
@@ -1212,7 +1271,7 @@ internal fun ShopDetail(
                     Text("Save name")
                 }
             },
-            dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = LocalEditDismiss.current) { Text("Cancel") } },
         )
     if (deleting)
         AlertDialog(
