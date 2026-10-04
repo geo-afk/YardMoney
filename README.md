@@ -2,7 +2,7 @@
 
 **Understand your money before payday.** YardMoney is an Android budgeting app for managing Jamaican dollars, everyday spending, bills, savings and receipts in one place.
 
-The current **0.3.6 local pilot** stores financial records on your device and works without an account. It uses a green Material interface with adjustable themes, spacing, corners and motion. Optional accounts and cloud backup are planned for the first public release; they are not implemented in this pilot.
+The current **0.4.0 local pilot** stores financial records on your device and works without an account. It uses a green Material interface with adjustable themes, spacing, corners and motion. Optional online accounts and cloud backup are planned for the first public release; they are not implemented in this pilot.
 
 [User guide](#using-yardmoney) · [Developer setup](#developer-setup) · [Testing](#testing-and-verification) · [Architecture](#architecture-and-source-map) · [Issues](https://github.com/geo-afk/YardMoney/issues) · [MIT license](LICENSE)
 
@@ -29,18 +29,18 @@ The current **0.3.6 local pilot** stores financial records on your device and wo
 
 | Item | Current state |
 | --- | --- |
-| Version | 0.3.6, Android version code 10 |
+| Version | 0.4.0, Android version code 11 |
 | Availability | Development pilot; no production store release configured |
 | Currency | Jamaican dollars (JMD), displayed as J$ where applicable |
 | Android support | Android 8.0 / API 26 minimum; compile and target API 36 |
 | Accounts and connectivity | Local use without sign-in; optional identity and cloud backup remain planned |
-| Latest host verification | 72 tests passed |
-| Latest device verification | 38 instrumentation tests passed on a Pixel 8 Pro |
+| Latest host verification | 77 tests passed |
+| Latest device verification | 43 instrumentation tests passed on a Pixel 8 Pro |
 | Build checks | Debug, instrumentation APK and optimized unsigned release builds passed |
-| Android lint | Zero errors and 34 warnings in the latest full verification |
+| Android lint | Zero errors and 33 warnings in the latest full verification |
 | License | MIT; copyright 2026 Geovanni Stewart |
 
-Verification was recorded on **2 October 2026**. These results describe the tested source, not every Android device or every real receipt. Camera usability, real-receipt accuracy, fresh-device recovery, background reminders and a broader accessibility/device matrix still need manual validation. See [the device checklist](docs/07-device-validation.md).
+Verification was recorded on **3 October 2026**. These results describe the tested source, not every Android device or every real receipt. Camera usability, real-receipt accuracy, fresh-device recovery, background reminders and a broader accessibility/device matrix still need manual validation. See [the device checklist](docs/07-device-validation.md).
 
 Some earlier documents and files under `dist/` record historical pilot builds. Their counts and checksums belong to those original artifacts. The current source includes receipt-detector, test-library and Activity scrolling/chart updates; build it for the latest pilot.
 
@@ -293,7 +293,7 @@ If your SDK is elsewhere, use its `platform-tools/adb` instead. A connected targ
 For a faster device-only rerun after configuring the environment:
 
 ```powershell
-.\gradlew.bat :app:connectedDebugAndroidTest --console=plain
+.\gradlew.bat :app:connectedDebugAndroidTest -PdeviceTestInstall=true --console=plain
 ```
 
 ### Explore with fictional data
@@ -302,7 +302,7 @@ Run `./scripts/install-demo.ps1` to build and install **YardMoney Demo**, a sepa
 
 ### Evidence and reports
 
-The latest full run passed 73 host tests and 38 device tests on a Pixel 8 Pro, with no skipped device tests. Receipt regression coverage checks ambiguous uniform images as well as a recognizable paper quadrilateral. UI tests cover forms, calendar behavior, category selection and appearance; repository tests use isolated databases for ledger invariants.
+The latest full run passed 77 host tests and 43 device tests on a Pixel 8 Pro, with no skipped device tests. Receipt regression coverage checks ambiguous uniform images as well as a recognizable paper quadrilateral. UI tests cover forms, calendar behavior, category selection and appearance; repository tests use isolated databases for ledger invariants.
 
 | Report | Generated location |
 | --- | --- |
@@ -336,7 +336,7 @@ YardMoney/
 └── core/gradle.lockfile        Core dependency locks
 ```
 
-Application ID: `jm.yardmoney`. Current Room schema version: 1. The root project and repository are named `YardMoney`; changing a folder name does not change the Android application ID.
+Application ID: `jm.yardmoney`. Current Room schema version: 2. The root project and repository are named `YardMoney`; changing a folder name does not change the Android application ID.
 
 Navigation uses saveable Compose root destinations and dialogs. The implementation does not currently use Navigation Compose or Navigation 3. The five root destinations are Home, Activity, Plan, Shop and More.
 

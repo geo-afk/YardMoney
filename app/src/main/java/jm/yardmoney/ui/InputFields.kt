@@ -39,17 +39,45 @@ internal class CurrencyVisualTransformation(private val editing: Boolean) : Visu
 }
 
 @Composable
-internal fun MoneyField(label: String, value: String, change: (String) -> Unit) {
+internal fun MoneyField(
+    label: String,
+    value: String,
+    prominent: Boolean = false,
+    change: (String) -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
     val raw = InputFormat.currencyText(value)
     val valid = raw.isEmpty() || Regex("-?[0-9]*(?:\\.[0-9]{0,2})?").matches(raw)
     LaunchedEffect(value) { if (raw != value && valid) change(raw) }
+    // The primary amount keeps its currency and placeholder visible before the first tap.
+    if (prominent) Text(label.replace(" (J$)", ""), style = MaterialTheme.typography.titleMedium)
     OutlinedTextField(
         value = raw,
+        textStyle =
+            if (prominent) MaterialTheme.typography.displaySmall
+            else MaterialTheme.typography.bodyLarge,
         onValueChange = { change(InputFormat.currencyText(it)) },
-        label = { Text(label.replace(" (J$)", "")) },
-        prefix = { Text("J$ ") },
-        placeholder = { Text("0.00") },
+        label =
+            if (prominent) null
+            else {
+                { Text(label.replace(" (J$)", "")) }
+            },
+        prefix = {
+            Text(
+                "J$ ",
+                style =
+                    if (prominent) MaterialTheme.typography.displaySmall
+                    else MaterialTheme.typography.bodyLarge,
+            )
+        },
+        placeholder = {
+            Text(
+                "0.00",
+                style =
+                    if (prominent) MaterialTheme.typography.displaySmall
+                    else MaterialTheme.typography.bodyLarge,
+            )
+        },
         singleLine = true,
         isError = !valid,
         supportingText =
@@ -71,7 +99,10 @@ internal fun MoneyField(label: String, value: String, change: (String) -> Unit) 
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         visualTransformation = CurrencyVisualTransformation(focused),
         enabled = !LocalSaving.current,
-        modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+        modifier =
+            Modifier.fillMaxWidth()
+                .onFocusChanged { focused = it.isFocused }
+                .semantics { if (prominent) contentDescription = label.replace(" (J$)", "") },
         colors =
             OutlinedTextFieldDefaults.colors(
                 disabledTextColor = MaterialTheme.colorScheme.onSurface,

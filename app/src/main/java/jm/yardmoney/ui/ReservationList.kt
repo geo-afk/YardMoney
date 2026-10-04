@@ -1,9 +1,12 @@
 package jm.yardmoney.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import jm.yardmoney.core.Money
@@ -45,7 +48,12 @@ internal fun ReservationList(
     edit: (Commitment) -> Unit,
 ) {
     val groups = reservationGroups(rows)
-    if (groups.isEmpty()) Text("No bills or reservations yet.")
+    if (groups.isEmpty())
+        EmptyState(
+            "No bills or reservations yet.",
+            "Add a bill and choose the account it will come from.",
+            icon = Icons.Default.Event,
+        )
     groups.forEach { group ->
         key(group.key) {
             var expanded by rememberSaveable { mutableStateOf(false) }
@@ -85,13 +93,46 @@ private fun ReservationRow(
     edit: (Commitment) -> Unit,
 ) {
     val c = row.commitment
-    Record(
-        c.name,
-        "${if (recurring) "Recurring · " else ""}${c.dueDate ?: "No due date"} · ${if (row.remainingMinor == 0L) "Paid" else "Reserved"}",
-        Money.format(row.remainingMinor),
-        if (row.remainingMinor > 0) ({ pay(c) }) else null,
-    )
-    TextButton(onClick = { edit(c) }, shape = MaterialTheme.shapes.small) {
-        Text(if (recurring) "Edit this payment" else "Edit reservation")
+    // The card edits this exact occurrence; paying is a separate, explicitly labelled action.
+    Card(
+        onClick = { edit(c) },
+        modifier = Modifier.fillMaxWidth(),
+        shape = YardShape.card,
+        colors =
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(
+            Modifier.padding(YardSpace.lg),
+            verticalArrangement = Arrangement.spacedBy(YardSpace.md),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(YardSpace.md),
+            ) {
+                IdentityBadge(categoryIdentity(c.name))
+                Column(Modifier.weight(1f)) {
+                    Text(c.name, style = MaterialTheme.typography.titleMedium)
+                    Text(c.dueDate ?: "No due date", style = MaterialTheme.typography.bodySmall)
+                }
+                Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(Money.format(row.remainingMinor), style = MaterialTheme.typography.headlineSmall)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (recurring) Icon(Icons.Default.Repeat, null, Modifier.size(18.dp))
+                Text(
+                    (if (recurring) "Recurring · " else "") +
+                        (if (row.remainingMinor == 0L) "Paid" else "Reserved"),
+                    Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (row.remainingMinor > 0)
+                    FilledTonalButton(onClick = { pay(c) }, shape = MaterialTheme.shapes.small) {
+                        Text("Pay")
+                    }
+            }
+        }
     }
 }

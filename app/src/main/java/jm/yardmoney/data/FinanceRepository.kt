@@ -32,6 +32,9 @@ data class FinanceSnapshot(
     val splits: List<TransactionSplit>,
     val limits: List<CategoryLimit>,
     val accountEntries: List<AccountEntry> = emptyList(),
+    val contributions: List<GoalContribution> = emptyList(),
+    val receiptItems: List<ReceiptItem> = emptyList(),
+    val savingsAccountIds: Set<String>? = null,
 )
 
 data class TransactionInput(
@@ -120,6 +123,8 @@ class FinanceRepository(private val db: YardDatabase) {
                         dao.readSplits(),
                         dao.readCategoryLimits(),
                         dao.readEntries(),
+                        dao.readContributions(),
+                        dao.readReceiptItems(),
                     )
                 }
             }
@@ -303,7 +308,11 @@ class FinanceRepository(private val db: YardDatabase) {
         goalId: String? = null,
         frequency: String = "ONCE",
         submissionKey: String = id(),
+        accountId: String? = null,
     ) = db.withTransaction {
+        require(accountId == null || dao.account(accountId) != null) {
+            "Choose a valid funding account."
+        }
         require(submissionKey.isNotBlank() && submissionKey.length <= 120)
         if (dao.commitment(submissionKey) != null || dao.template(submissionKey) != null)
             return@withTransaction
@@ -319,6 +328,7 @@ class FinanceRepository(private val db: YardDatabase) {
                     amount,
                     dueDate?.toString(),
                     goalId,
+                    accountId,
                 )
             )
         else {
@@ -335,6 +345,7 @@ class FinanceRepository(private val db: YardDatabase) {
                     dueDate.toString(),
                     frequency,
                     dueDate.dayOfMonth,
+                    accountId = accountId,
                 )
             )
             materializeBills()
@@ -360,6 +371,7 @@ class FinanceRepository(private val db: YardDatabase) {
                             template.kind,
                             template.amountMinor,
                             date.toString(),
+                            accountId = template.accountId,
                         )
                     )
                 date =
@@ -372,16 +384,27 @@ class FinanceRepository(private val db: YardDatabase) {
         }
     }
 
-    suspend fun editCommitment(id: String, name: String, amount: Long, due: LocalDate?) =
-        db.withTransaction {
-            val c = dao.commitment(id) ?: error("Reservation not found.")
-            require(
-                name.isNotBlank() && amount in 1..Money.MAX_MINOR && amount >= dao.settled(id)
-            ) {
-                "Amount cannot be below payments already made."
-            }
-            dao.update(c.copy(name = name.trim(), amountMinor = amount, dueDate = due?.toString()))
+    suspend fun editCommitment(
+        id: String,
+        name: String,
+        amount: Long,
+        due: LocalDate?,
+        accountId: String? = null,
+    ) = db.withTransaction {
+        val c = dao.commitment(id) ?: error("Reservation not found.")
+        require(name.isNotBlank() && amount in 1..Money.MAX_MINOR && amount >= dao.settled(id)) {
+            "Amount cannot be below payments already made."
         }
+        require(accountId == null || dao.account(accountId) != null)
+        dao.update(
+            c.copy(
+                name = name.trim(),
+                amountMinor = amount,
+                dueDate = due?.toString(),
+                accountId = accountId,
+            )
+        )
+    }
 
     suspend fun removeCommitment(id: String) = db.withTransaction {
         val c = dao.commitment(id) ?: error("Reservation not found.")
@@ -597,14 +620,29 @@ class FinanceRepository(private val db: YardDatabase) {
 
     suspend fun toggleItem(item: ShoppingItem) = dao.put(item.copy(checked = !item.checked))
 
-    suspend fun setCategoryLimit(category: String, bucket: String, amount: Long) {
+    suspend fun setCategoryLimit(
+        category: String,
+        bucket: String,
+        amount: Long,
+        accountId: String? = null,
+        originalId: String? = null,
+    ) = db.withTransaction {
+        require(accountId == null || dao.account(accountId) != null)
         require(
             category.isNotBlank() &&
                 bucket in setOf("NEEDS", "WANTS", "SAVINGS") &&
                 amount in 0..Money.MAX_MINOR
         )
+        // Rekeying an edited limit replaces its previous identity atomically.
+        if (originalId != null) dao.deleteCategoryLimit(originalId)
         dao.put(
-            CategoryLimit("$bucket:${category.trim().lowercase()}", category.trim(), bucket, amount)
+            CategoryLimit(
+                (accountId?.let { "$it:" } ?: "") + "$bucket:${category.trim().lowercase()}",
+                category.trim(),
+                bucket,
+                amount,
+                accountId,
+            )
         )
     }
 

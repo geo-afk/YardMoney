@@ -1,9 +1,14 @@
 package jm.yardmoney.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import jm.yardmoney.AppModel
 import jm.yardmoney.core.Money
@@ -16,6 +21,7 @@ internal fun TransactionForm(
     initialKind: String,
     commitment: Commitment?,
     busy: Boolean,
+    initialAccountId: String? = null,
     close: () -> Unit,
 ) {
     val key = rememberSaveable { FinanceRepository.id() }
@@ -27,7 +33,13 @@ internal fun TransactionForm(
     var description by rememberSaveable { mutableStateOf(commitment?.name ?: "") }
     var category by rememberSaveable { mutableStateOf("Other") }
     var bucket by rememberSaveable { mutableStateOf("NEEDS") }
-    var account by rememberSaveable { mutableStateOf(data.ledger.accounts.first().account.id) }
+    var account by rememberSaveable {
+        mutableStateOf(
+            (commitment?.accountId ?: initialAccountId)?.takeIf { id ->
+                data.ledger.accounts.any { it.account.id == id }
+            } ?: data.ledger.accounts.first().account.id
+        )
+    }
     var destination by rememberSaveable {
         mutableStateOf(
             data.ledger.accounts.firstOrNull { it.account.id != account }?.account?.id ?: ""
@@ -37,6 +49,30 @@ internal fun TransactionForm(
     var refund by rememberSaveable { mutableStateOf("") }
     var splits by rememberSaveable { mutableStateOf("") }
     val accounts = data.ledger.accounts.associate { it.account.id to it.account.name }
+    val accountOptions =
+        data.ledger.accounts.map {
+            IdentityOption(
+                it.account.id,
+                it.account.name,
+                Money.format(it.balanceMinor),
+                accountIdentity(it.account),
+            )
+        }
+    val categories =
+        (listOf(
+                "Groceries",
+                "Transport",
+                "Utilities",
+                "Home",
+                "Health",
+                "Dining",
+                "Entertainment",
+                "Clothing",
+                "Savings",
+                "Other",
+            ) + data.splits.map { it.category })
+            .distinct()
+            .map { IdentityOption(it, it) }
 
     var splitExpanded by rememberSaveable { mutableStateOf(false) }
     val validAmount = runCatching {
@@ -96,12 +132,10 @@ internal fun TransactionForm(
     ) {
         if (commitment == null)
             MoneyEntrySection("Transaction type") {
-                Choice(
-                    "Type",
-                    kind,
-                    listOf("EXPENSE", "INCOME", "TRANSFER", "REFUND", "ADJUSTMENT"),
-                ) {
+                TransactionTypePicker(kind) {
                     kind = it
+                    refund = ""
+                    goal = ""
                 }
                 Text(
                     when (kind) {
@@ -117,17 +151,25 @@ internal fun TransactionForm(
                 )
             }
         MoneyEntrySection("Amount and date") {
-            Field("Amount (J$)", amount) { amount = it }
+            MoneyField("Amount (J$)", amount, prominent = true) { amount = it }
             Field("Date (YYYY-MM-DD)", date) { date = it }
         }
         MoneyEntrySection(if (kind == "TRANSFER") "Move between accounts" else "Account") {
-            IdChoice(if (kind == "TRANSFER") "From account" else "Account", account, accounts) {
+            IdentityPicker(
+                if (kind == "TRANSFER") "From account" else "Account",
+                account,
+                accountOptions,
+            ) {
                 account = it
                 if (destination == it)
                     destination = accounts.keys.firstOrNull { id -> id != it } ?: ""
             }
             if (kind == "TRANSFER") {
-                IdChoice("To account", destination, accounts.filterKeys { it != account }) {
+                IdentityPicker(
+                    "To account",
+                    destination,
+                    accountOptions.filter { it.id != account },
+                ) {
                     destination = it
                 }
                 IdChoice(
@@ -143,7 +185,9 @@ internal fun TransactionForm(
         MoneyEntrySection("Details") {
             Field("Description", description) { description = it }
             if (kind == "EXPENSE" || kind == "REFUND") {
-                Field("Category", category) { category = it }
+                IdentityPicker("Category", category, categories, allowCustom = true) {
+                    category = it
+                }
                 Choice("Budget group", bucket, listOf("NEEDS", "WANTS", "SAVINGS")) { bucket = it }
             }
             if (kind == "REFUND")
@@ -163,6 +207,12 @@ internal fun TransactionForm(
                             },
                 ) {
                     refund = it
+                    data.ledger.transactions
+                        .find { tx -> tx.id == it }
+                        ?.let { original ->
+                            bucket = original.bucket
+                            category = original.category
+                        }
                 }
         }
         if (kind == "EXPENSE" || kind == "REFUND")
@@ -194,3 +244,38 @@ internal fun IdChoice(
     options: Map<String, String>,
     change: (String) -> Unit,
 ) = DropdownField(label, id, options, change)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun TransactionTypePicker(selected: String, change: (String) -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        listOf(
+                "EXPENSE" to "Expense",
+                "INCOME" to "Income",
+                "TRANSFER" to "Transfer",
+                "REFUND" to "Refund",
+                "ADJUSTMENT" to "Adjustment",
+            )
+            .forEach { (id, label) ->
+                val icon =
+                    when (id) {
+                        "EXPENSE" -> Icons.Default.NorthEast
+                        "INCOME" -> Icons.Default.SouthWest
+                        "TRANSFER" -> Icons.Default.SwapHoriz
+                        "REFUND" -> Icons.AutoMirrored.Filled.Undo
+                        else -> Icons.Default.Tune
+                    }
+                FilterChip(
+                    selected = selected == id,
+                    onClick = { change(id) },
+                    enabled = !LocalSaving.current,
+                    label = { Text(label) },
+                    leadingIcon = { Icon(icon, null, Modifier.size(18.dp)) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                )
+            }
+    }
+}

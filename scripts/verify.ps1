@@ -7,7 +7,7 @@ try {
     & .\gradlew.bat :core:test :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug :app:assembleRelease --console=plain
     if ($LASTEXITCODE -ne 0) { throw 'Build, tests or lint failed.' }
     if ($DeviceTests) {
-        & .\gradlew.bat :app:connectedDebugAndroidTest --console=plain
+        & .\gradlew.bat :app:connectedDebugAndroidTest -PdeviceTestInstall=true --console=plain
         if ($LASTEXITCODE -ne 0) { throw 'Android device tests failed.' }
     }
 } finally {

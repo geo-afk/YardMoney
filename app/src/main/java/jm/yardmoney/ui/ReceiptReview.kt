@@ -48,6 +48,7 @@ internal fun ReceiptReview(
     busy: Boolean,
     close: () -> Unit,
     rescanned: (String) -> Unit = {},
+    initialAccountId: String? = null,
 ) {
     val suggestion = remember(draft.id) { ReceiptParser.parse(draft.rawText) }
     val saved =
@@ -84,7 +85,9 @@ internal fun ReceiptReview(
         }
     var account by
         rememberSaveable(draft.id) {
-            mutableStateOf(savedText("account", data.ledger.accounts.first().account.id))
+            mutableStateOf(
+                savedText("account", initialAccountId ?: data.ledger.accounts.first().account.id)
+            )
         }
     var totalOnly by
         rememberSaveable(draft.id) {

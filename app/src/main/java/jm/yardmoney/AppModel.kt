@@ -16,6 +16,8 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     val repo by lazy { app.repository }
     val error = MutableStateFlow<String?>(null)
     val busy = MutableStateFlow(false)
+    // One pending confirmation survives a brief collector gap; the visible scaffold consumes it.
+    val success = MutableStateFlow<String?>(null)
     val scanProgress = MutableStateFlow<String?>(null)
     private val openRetries =
         kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
@@ -32,14 +34,14 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
-        act { repo.materializeBills() }
+        act(successMessage = null) { repo.materializeBills() }
     }
 
     fun retryOpenData() {
         openRetries.trySend(Unit)
     }
 
-    fun act(done: () -> Unit = {}, block: suspend () -> Unit) {
+    fun act(done: () -> Unit = {}, successMessage: String? = "Saved", block: suspend () -> Unit) {
         if (busy.value) return
         busy.value = true
         error.value = null
@@ -57,7 +59,10 @@ class AppModel(application: Application) : AndroidViewModel(application) {
                 scanProgress.value = null
                 busy.value = false
             }
-            if (succeeded) done()
+            if (succeeded) {
+                success.value = successMessage
+                done()
+            }
         }
     }
 

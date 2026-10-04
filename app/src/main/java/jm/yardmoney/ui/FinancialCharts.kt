@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
@@ -53,7 +54,7 @@ internal fun BudgetOverview(
     ElevatedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text(
-                "Your budget, balanced",
+                "Your money, with a purpose",
                 style = MaterialTheme.typography.titleLarge,
             )
             Text(
@@ -136,7 +137,7 @@ internal fun BudgetOverview(
                                 " this pay period.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                    else ChartBars(categories, listOf(colors[index]))
+                    else ChartBars(categories, listOf(colors[index]), categoryColors = true)
                     if (index == 2) {
                         Text("Goal savings", style = MaterialTheme.typography.titleSmall)
                         if (data.ledger.goals.isEmpty())
@@ -183,8 +184,10 @@ internal fun FinancialCharts(data: FinanceSnapshot, today: LocalDate) {
                 .filter { it.kind in listOf("EXPENSE", "REFUND") }
                 .map { if (it.kind == "REFUND") -it.amountMinor else it.amountMinor }
         )
-    Text("Income and spending", style = MaterialTheme.typography.titleLarge)
-    ChartBars(listOf("Income" to income, "Spending less refunds" to spending), colors)
+    MoneyCard {
+        SectionHeading("Income and spending")
+        ChartBars(listOf("Income" to income, "Spending less refunds" to spending), colors)
+    }
     val ids = transactions.map { it.id }.toSet()
     val categories =
         data.splits
@@ -193,8 +196,10 @@ internal fun FinancialCharts(data: FinanceSnapshot, today: LocalDate) {
             .map { (label, rows) -> label to Money.sum(rows.map { it.amountMinor }) }
             .sortedByDescending { it.second }
             .take(8)
-    Text("Spending by category", style = MaterialTheme.typography.titleLarge)
-    ChartBars(categories, colors)
+    MoneyCard {
+        SectionHeading("Spending by category")
+        ChartBars(categories, colors, categoryColors = true)
+    }
     // Refunds retain their original merchant grouping rather than an arbitrary refund description.
     val merchants =
         transactions
@@ -213,10 +218,11 @@ internal fun FinancialCharts(data: FinanceSnapshot, today: LocalDate) {
             }
             .sortedByDescending { it.second }
             .take(8)
-    Text("Spending by merchant", style = MaterialTheme.typography.titleLarge)
-    ChartBars(merchants, colors)
+    MoneyCard {
+        SectionHeading("Spending by merchant")
+        ChartBars(merchants, colors)
+    }
     val month = YearMonth.from(today)
-    Text("Six-month spending trend", style = MaterialTheme.typography.titleLarge)
     val months =
         (5 downTo 0).map { ago ->
             val m = month.minusMonths(ago.toLong())
@@ -231,31 +237,37 @@ internal fun FinancialCharts(data: FinanceSnapshot, today: LocalDate) {
                         .map { if (it.kind == "REFUND") -it.amountMinor else it.amountMinor }
                 )
         }
-    ChartBars(months, colors)
-    Text(
-        "Recorded data only; zero months may have no records. Transfers are excluded.",
-        style = MaterialTheme.typography.bodySmall,
-    )
-    Text("Savings progress", style = MaterialTheme.typography.titleLarge)
-    if (data.ledger.goals.isEmpty()) Text("Create a savings goal in Plan to see progress here.")
-    data.ledger.goals.forEach { goal ->
-        AmountRow(goal.goal.name, goal.savedMinor)
+    MoneyCard {
+        SectionHeading("Six-month spending trend")
+        ChartBars(months, colors)
         Text(
-            "Target ${Money.format(goal.goal.targetMinor)} · ${Money.format((goal.goal.targetMinor-goal.savedMinor).coerceAtLeast(0))} remaining"
+            "Recorded data only; zero months may have no records. Transfers are excluded.",
+            style = MaterialTheme.typography.bodySmall,
         )
-        LinearProgressIndicator(
-            progress = {
-                if (goal.goal.targetMinor > 0)
-                    (goal.savedMinor.toDouble() / goal.goal.targetMinor).toFloat().coerceIn(0f, 1f)
-                else 0f
-            },
-            modifier = Modifier.fillMaxWidth(),
+    }
+    SectionHeading("Savings progress")
+    if (data.ledger.goals.isEmpty())
+        EmptyState(
+            "Make space for a goal",
+            "Create a savings goal in Plan to see its progress here.",
+        )
+    data.ledger.goals.forEach { goal ->
+        ProgressMoneyCard(
+            goal.goal.name,
+            "Recorded savings toward your target",
+            goal.savedMinor,
+            goal.goal.targetMinor,
+            categoryIdentity(goal.goal.name),
         )
     }
 }
 
 @Composable
-private fun ChartBars(values: List<Pair<String, Long>>, colors: List<Color>) {
+private fun ChartBars(
+    values: List<Pair<String, Long>>,
+    colors: List<Color>,
+    categoryColors: Boolean = false,
+) {
     val motion = LocalMotion.current
     if (values.isEmpty()) {
         Text("No spending recorded yet. Add an expense or review a receipt to begin.")
@@ -264,7 +276,15 @@ private fun ChartBars(values: List<Pair<String, Long>>, colors: List<Color>) {
     val max = values.maxOf { it.second }.coerceAtLeast(1)
     values.forEachIndexed { i, (label, amount) ->
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            AmountRow(label, amount)
+            if (categoryColors) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    IdentityBadge(categoryIdentity(label))
+                    Column(Modifier.weight(1f)) { AmountRow(label, amount) }
+                }
+            } else AmountRow(label, amount)
             val progress by
                 animateFloatAsState(
                     (amount.toDouble() / max).toFloat().coerceIn(0f, 1f),
@@ -273,7 +293,9 @@ private fun ChartBars(values: List<Pair<String, Long>>, colors: List<Color>) {
                 )
             LinearProgressIndicator(
                 progress = { progress },
-                color = colors[i % colors.size],
+                color =
+                    if (categoryColors) identityColor(categoryIdentity(label))
+                    else colors[i % colors.size],
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                 modifier =
                     Modifier.fillMaxWidth().height(12.dp).semantics {

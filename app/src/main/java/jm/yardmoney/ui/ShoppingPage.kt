@@ -1,6 +1,8 @@
 package jm.yardmoney.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -30,7 +32,10 @@ internal fun ShoppingPage(
             .groupBy { it.productKey }
             .mapValues { (_, rows) -> rows.maxBy { it.date } }
     Page {
-        Text("Plan your next shop", style = MaterialTheme.typography.headlineSmall)
+        SectionHeading(
+            "A smarter shopping trip",
+            subtitle = "A little preparation goes a long way.",
+        )
         Text(
             "Estimate from your own dated receipts or prices you enter. Store prices can change; this is not a live quote."
         )
@@ -38,18 +43,40 @@ internal fun ShoppingPage(
             onClick = { create = true },
             shape = MaterialTheme.shapes.small,
         ) {
+            Icon(Icons.Default.AddShoppingCart, null)
+            Spacer(Modifier.width(8.dp))
             Text("New shopping list")
         }
         if (selected != null) {
-            IdChoice(
+            IdentityPicker(
                 "Shopping list",
                 selected.id,
-                data.shopping.lists.associate { it.id to it.name },
+                data.shopping.lists.map {
+                    IdentityOption(
+                        it.id,
+                        it.name,
+                        identity = MoneyIdentity(Icons.Default.ShoppingBasket, 0xFF00865A),
+                    )
+                },
             ) {
                 listId = it
             }
             val items = data.shopping.items.filter { it.listId == selected.id }
             val pending = items.filter { !it.checked }
+            MoneyCard {
+                Text("Ready for the checkout", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "${items.size-pending.size} of ${items.size} items checked",
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                LinearProgressIndicator(
+                    progress = {
+                        if (items.isEmpty()) 0f
+                        else (items.size - pending.size).toFloat() / items.size
+                    },
+                    modifier = Modifier.fillMaxWidth().height(10.dp),
+                )
+            }
             val estimates = pending.map { item ->
                 val price = item.manualPriceMinor ?: prices[item.productKey]?.packPriceMinor
                 price?.let { runCatching { Quantity.estimate(it, item.quantity) }.getOrNull() }
@@ -116,8 +143,18 @@ internal fun ShoppingPage(
                 Text("Add item")
             }
             items.forEach { item ->
-                OutlinedCard {
-                    Column(Modifier.padding(16.dp)) {
+                Card(
+                    shape = YardShape.card,
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                ) {
+                    Column(
+                        Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        IdentityBadge(categoryIdentity(item.name))
                         Tick(
                             "${item.name} × ${item.quantity}${if(item.optional)" · optional" else ""}",
                             item.checked,
@@ -148,10 +185,22 @@ internal fun ShoppingPage(
                 "Checking an item is a shopping checklist action. Record your purchase separately; it does not change your balance.",
                 style = MaterialTheme.typography.bodySmall,
             )
-        } else Text("Create a list, then add items you plan to buy.")
-        Text("Your price history", style = MaterialTheme.typography.titleLarge)
+        } else
+            EmptyState(
+                "Your next shop starts here",
+                "Create a list and add items to compare its cost with your budget.",
+                icon = Icons.Default.ShoppingBasket,
+            )
+        SectionHeading(
+            "Your price notebook",
+            subtitle = "Compare the prices you have actually paid.",
+        )
         if (data.receipt.prices.isEmpty())
-            Text("Reviewed receipt items with a package size will appear here.")
+            EmptyState(
+                "Build your own price history",
+                "Review a receipt and confirm its package sizes to compare purchases here.",
+                icon = Icons.Default.PriceCheck,
+            )
         data.receipt.prices
             .groupBy { it.productKey }
             .forEach { (_, observations) ->

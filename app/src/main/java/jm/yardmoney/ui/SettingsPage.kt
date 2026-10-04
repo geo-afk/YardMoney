@@ -51,11 +51,16 @@ internal fun SettingsPage(model: AppModel, data: FinanceSnapshot, open: (String)
         }
         SettingsGroup(
             "Accounts",
-            "Balances and protected savings",
+            "Individual accounts or one combined view",
             Icons.Default.AccountBalanceWallet,
             expanded == "Accounts",
             { toggle("Accounts") },
         ) {
+            FilledTonalButton(onClick = { open("accounts") }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.AccountBalanceWallet, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Open accounts overview")
+            }
             data.ledger.accounts.forEach { entry ->
                 Record(
                     entry.account.name,

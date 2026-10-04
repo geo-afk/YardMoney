@@ -11,6 +11,7 @@ class YardMoneyApplication : Application() {
     val database by lazy {
         System.loadLibrary("sqlcipher")
         Room.databaseBuilder(this, YardDatabase::class.java, "yardmoney.db")
+            .addMigrations(YardDatabase.MIGRATION_1_2)
             .openHelperFactory(SupportOpenHelperFactory(storage.databasePassphrase()))
             .build()
     }

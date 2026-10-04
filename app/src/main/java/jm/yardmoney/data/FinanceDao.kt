@@ -5,6 +5,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FinanceDao {
+    @Query("SELECT * FROM goal_contributions")
+    suspend fun readContributions(): List<GoalContribution>
+
+    @Query("SELECT * FROM receipt_items") suspend fun readReceiptItems(): List<ReceiptItem>
+
     @Query("SELECT * FROM profile WHERE id=1") fun profile(): Flow<Profile?>
 
     @Query("SELECT * FROM profile WHERE id=1") suspend fun getProfile(): Profile?
@@ -57,6 +62,8 @@ interface FinanceDao {
     fun categoryLimits(): Flow<List<CategoryLimit>>
 
     @Upsert suspend fun put(limit: CategoryLimit)
+
+    @Query("DELETE FROM category_limits WHERE id=:id") suspend fun deleteCategoryLimit(id: String)
 
     @Query("SELECT * FROM entries") suspend fun readEntries(): List<AccountEntry>
 

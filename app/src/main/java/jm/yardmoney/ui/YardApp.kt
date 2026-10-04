@@ -26,9 +26,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.LocalDate
@@ -57,8 +60,7 @@ fun YardApp(model: AppModel = viewModel()) {
                             color = MaterialTheme.colorScheme.primary,
                         )
                         if (error == null) {
-                            CircularProgressIndicator()
-                            Text("Opening your private budget…")
+                            LoadingBudget()
                         } else {
                             Text(error!!, color = MaterialTheme.colorScheme.error)
                             OutlinedButton(
@@ -74,6 +76,7 @@ fun YardApp(model: AppModel = viewModel()) {
                 if (error != null && data != null)
                     AlertDialog(
                         onDismissRequest = { model.error.value = null },
+                        icon = { Icon(Icons.Default.ErrorOutline, null) },
                         title = { Text("Please check this") },
                         text = { Text(error!!) },
                         confirmButton = {
@@ -105,7 +108,8 @@ private fun Setup(model: AppModel, busy: Boolean) {
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.primary,
         )
-        Text("A little clarity before payday.", style = MaterialTheme.typography.headlineSmall)
+        IdentityBadge(MoneyIdentity(Icons.Default.Savings, 0xFF00865A))
+        Text("A little clarity before payday.", style = MaterialTheme.typography.headlineLarge)
         var appearanceExpanded by rememberSaveable { mutableStateOf(false) }
         TextButton(
             onClick = { appearanceExpanded = !appearanceExpanded },
@@ -185,7 +189,25 @@ private fun MainPages(
             if (uri != null) cropUri = uri.toString()
         }
     val scanProgress by model.scanProgress.collectAsStateWithLifecycle()
-    val safe = safe(data, model.repo.today)
+    val prefs = LocalContext.current.getSharedPreferences("navigation", 0)
+    var selectedAccount by rememberSaveable {
+        mutableStateOf(prefs.getString("account_scope", null))
+    }
+    val scope = selectedAccount?.takeIf { id -> data.ledger.accounts.any { it.account.id == id } }
+    val view = remember(data, scope) { scopedFinance(data, scope) }
+    fun selectAccount(id: String?) {
+        selectedAccount = id
+        prefs.edit { putString("account_scope", id) }
+    }
+    val safe = safe(view, model.repo.today)
+    val snack = remember { SnackbarHostState() }
+    val success by model.success.collectAsStateWithLifecycle()
+    LaunchedEffect(success) {
+        success?.let {
+            model.success.value = null
+            snack.showSnackbar(it)
+        }
+    }
     val icons =
         listOf(
             Icons.Default.Home,
@@ -214,32 +236,68 @@ private fun MainPages(
             },
             confirmButton = {},
         )
-    val expanded = LocalConfiguration.current.screenWidthDp >= 600
+    val expanded =
+        with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() >= 600.dp }
     Scaffold(
+        snackbarHost = { SnackbarHost(snack) },
         topBar = {
-            CenterAlignedTopAppBar(
-                modifier = Modifier.padding(top = 8.dp),
-                windowInsets =
-                    WindowInsets.safeDrawing.only(
-                        WindowInsetsSides.Top + WindowInsetsSides.Horizontal
-                    ),
-                title = {
-                    Text(if (tab == "Home") "YardMoney" else tab, fontWeight = FontWeight.Bold)
-                },
-                actions = {
-                    if (busy) CircularProgressIndicator(Modifier.size(24.dp))
-                    IconButton(
-                        enabled = !busy,
-                        onClick = {
-                            form = "transaction"
-                            txKind = "EXPENSE"
-                            payCommitId = null
-                        },
+            Column {
+                CenterAlignedTopAppBar(
+                    modifier = Modifier.padding(top = 8.dp),
+                    windowInsets =
+                        WindowInsets.safeDrawing.only(
+                            WindowInsetsSides.Top + WindowInsetsSides.Horizontal
+                        ),
+                    title = {
+                        Text(if (tab == "Home") "YardMoney" else tab, fontWeight = FontWeight.Bold)
+                    },
+                    actions = {
+                        if (busy) CircularProgressIndicator(Modifier.size(24.dp))
+                        IconButton(
+                            enabled = !busy,
+                            onClick = {
+                                form = "transaction"
+                                txKind = "EXPENSE"
+                                payCommitId = null
+                            },
+                        ) {
+                            Icon(Icons.Default.Add, "Add transaction")
+                        }
+                    },
+                )
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    IdentityPicker(
+                        "Viewing",
+                        scope ?: "",
+                        listOf(
+                            IdentityOption(
+                                "",
+                                "All accounts",
+                                "Combined view",
+                                MoneyIdentity(Icons.Default.Wallet, 0xFF00865A),
+                            )
+                        ) +
+                            data.ledger.accounts.map {
+                                IdentityOption(
+                                    it.account.id,
+                                    it.account.name,
+                                    Money.format(it.balanceMinor),
+                                    accountIdentity(it.account),
+                                )
+                            },
+                        Modifier.weight(1f),
                     ) {
-                        Icon(Icons.Default.Add, "Add transaction")
+                        selectAccount(it.takeIf { it.isNotBlank() })
                     }
-                },
-            )
+                    IconButton(onClick = { tab = "Accounts" }) {
+                        Icon(Icons.Default.AccountBalanceWallet, "Account details")
+                    }
+                }
+            }
         },
         bottomBar = {
             if (!expanded)
@@ -308,6 +366,8 @@ private fun MainPages(
         Row(Modifier.padding(inset)) {
             if (expanded)
                 NavigationRail(
+                    // Short landscape windows still expose every destination by scrolling the rail.
+                    modifier = Modifier.fillMaxHeight().verticalScroll(rememberScrollState()),
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                     contentColor = MaterialTheme.colorScheme.onSurface,
                 ) {
@@ -354,257 +414,51 @@ private fun MainPages(
                 },
                 label = "Page transition",
             ) { destination ->
-                when (destination) {
-                    "Home" ->
-                        Page {
-                            Text(
-                                "Hello, ${data.ledger.profile!!.name.ifBlank{"neighbour"}}",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            SafeCard(safe, data.ledger.profile!!.nextPayday)
-                            BudgetOverview(data, model.repo.today)
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Button(
-                                    onClick = {
-                                        form = "transaction"
-                                        txKind = "EXPENSE"
-                                        payCommitId = null
-                                    },
-                                    Modifier.weight(1f),
-                                    shape = MaterialTheme.shapes.small,
-                                ) {
-                                    Text("Add expense")
-                                }
-                                OutlinedButton(
-                                    onClick = { form = "scan" },
-                                    Modifier.weight(1f),
-                                    shape = MaterialTheme.shapes.small,
-                                ) {
-                                    Text("Scan receipt")
-                                }
-                            }
-                            Card {
-                                Column(
-                                    Modifier.padding(20.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Text(
-                                        "What is protected?",
-                                        style = MaterialTheme.typography.titleMedium,
-                                    )
-                                    AmountRow("Included account balances", safe.availableMinor)
-                                    AmountRow(
-                                        "Bills, savings and debt reserved",
-                                        safe.protectedMinor,
-                                    )
-                                    Text(
-                                        "Reservations include unpaid items due by payday, plus items with no due date. Money already in protected accounts is excluded.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                }
-                            }
-                            Text("Coming up", style = MaterialTheme.typography.titleLarge)
-                            reservationGroups(data.ledger.commitments)
-                                .map { it.primary }
-                                .filter { it.remainingMinor > 0 }
-                                .take(4)
-                                .forEach { c ->
-                                    Record(
-                                        c.commitment.name,
-                                        "${c.commitment.dueDate?:"No due date"} · ${c.commitment.kind.lowercase()}",
-                                        Money.format(c.remainingMinor),
-                                    ) {
-                                        payCommitId = c.commitment.id
-                                        txKind =
-                                            if (c.commitment.kind == "SAVINGS") "TRANSFER"
-                                            else "EXPENSE"
-                                        form = "transaction"
-                                    }
-                                }
-                            if (data.ledger.commitments.none { it.remainingMinor > 0 })
-                                Text(
-                                    "No bills reserved yet. Add what is due before payday in Plan."
+                fun openPage(route: String) {
+                    when {
+                        route == "accounts" -> tab = "Accounts"
+                        route == "activity" -> tab = "Activity"
+                        route.startsWith("pay:") -> {
+                            payCommitId = route.substringAfter(':')
+                            txKind =
+                                if (
+                                    data.ledger.commitments
+                                        .first { it.commitment.id == payCommitId }
+                                        .commitment
+                                        .kind == "SAVINGS"
                                 )
-                            Text("Your accounts", style = MaterialTheme.typography.titleLarge)
-                            data.ledger.accounts.forEach {
-                                Record(
-                                    it.account.name,
-                                    if (it.account.included) "Available to spend" else "Protected",
-                                    Money.format(it.balanceMinor),
-                                )
-                            }
+                                    "TRANSFER"
+                                else "EXPENSE"
+                            form = "transaction"
                         }
-                    "Activity" ->
-                        Page {
-                            Text("Money in and out", style = MaterialTheme.typography.headlineSmall)
-                            val p = data.ledger.profile!!
-                            val current =
-                                data.ledger.transactions.filter {
-                                    it.date >= p.periodStart &&
-                                        it.date <= model.repo.today.toString()
-                                }
-                            AmountRow(
-                                "Received this period",
-                                Money.sum(
-                                    current.filter { it.kind == "INCOME" }.map { it.amountMinor }
-                                ),
-                            )
-                            AmountRow(
-                                "Spent, less refunds",
-                                Money.sum(
-                                    current
-                                        .filter { it.kind == "EXPENSE" || it.kind == "REFUND" }
-                                        .map {
-                                            if (it.kind == "REFUND") -it.amountMinor
-                                            else it.amountMinor
-                                        }
-                                ),
-                            )
-                            Choice(
-                                "Record",
-                                txKind,
-                                listOf("EXPENSE", "INCOME", "TRANSFER", "REFUND", "ADJUSTMENT"),
-                            ) {
-                                txKind = it
-                                payCommitId = null
-                                form = "transaction"
-                            }
-                            ActivityExplorer(
-                                data.ledger.transactions,
-                                LocalDate.parse(p.periodStart),
-                                model.repo.today,
-                            ) { records ->
-                                records.forEach { t ->
-                                    Record(
-                                        t.description.ifBlank { t.category },
-                                        "${t.date} · ${t.kind.lowercase()} · ${t.bucket.lowercase()}",
-                                        Money.format(t.amountMinor),
-                                    ) {
-                                        form = "editTx:${t.id}"
-                                    }
-                                }
-                            }
-                            Text("Receipt drafts", style = MaterialTheme.typography.titleLarge)
-                            data.receipt.drafts.forEach { d ->
-                                Record("Review receipt", d.createdDate, "Draft") { draftId = d.id }
-                            }
-                            data.receipt.receipts.forEach { r ->
-                                Record(
-                                    r.merchant,
-                                    "${r.date} · ${r.branch} · reviewed",
-                                    Money.format(r.totalMinor),
-                                ) {
-                                    form = "receipt:${r.id}"
-                                }
-                            }
+                        route == "transaction" -> {
+                            payCommitId = null
+                            txKind = "EXPENSE"
+                            form = route
                         }
-                    "Plan" ->
-                        Page {
-                            val p = data.ledger.profile!!
-                            Text("Your payday plan", style = MaterialTheme.typography.headlineSmall)
-                            Text(
-                                "Next payday: ${p.nextPayday} · ${p.frequency.lowercase().replace('_',' ')}"
-                            )
-                            OutlinedButton(
-                                onClick = { form = "payday" },
-                                shape = MaterialTheme.shapes.small,
-                            ) {
-                                Text("Start a new pay period")
+                        else -> form = route
+                    }
+                }
+                key(scope, destination) {
+                    when (destination) {
+                        "Home" ->
+                            DashboardPage(view, model.repo.today, scope, ::openPage) {
+                                selectAccount(it)
+                                tab = "Accounts"
                             }
-                            BudgetOverview(
-                                data,
-                                model.repo.today,
-                                onChangeSplit = { form = "split" },
-                            )
-                            Text("Category limits", style = MaterialTheme.typography.titleLarge)
-                            Text(
-                                "These guide spending within your percentage plan. They do not subtract another reservation from safe to spend."
-                            )
-                            OutlinedButton(
-                                onClick = { form = "limit" },
-                                shape = MaterialTheme.shapes.small,
-                            ) {
-                                Text("Set a category limit")
-                            }
-                            val periodIds =
-                                data.ledger.transactions
-                                    .filter {
-                                        it.date >= p.periodStart &&
-                                            it.date <= model.repo.today.toString()
-                                    }
-                                    .map { it.id }
-                                    .toSet()
-                            data.limits.forEach { limit ->
-                                val used =
-                                    Money.sum(
-                                        data.splits
-                                            .filter {
-                                                it.transactionId in periodIds &&
-                                                    it.bucket == limit.bucket &&
-                                                    it.category.equals(limit.category, true)
-                                            }
-                                            .map { it.amountMinor }
-                                    )
-                                AmountRow(
-                                    "${limit.category} · remaining this period",
-                                    limit.limitMinor - used,
-                                )
-                            }
-                            Text(
-                                "Bills and protected money",
-                                style = MaterialTheme.typography.titleLarge,
-                            )
-                            Button(
-                                onClick = { form = "commitment" },
-                                shape = MaterialTheme.shapes.small,
-                            ) {
-                                Text("Add bill or reservation")
-                            }
-                            ReservationList(
-                                data.ledger.commitments,
-                                pay = { c ->
-                                    payCommitId = c.id
-                                    txKind = if (c.kind == "SAVINGS") "TRANSFER" else "EXPENSE"
-                                    form = "transaction"
-                                },
-                                edit = { c -> form = "editCommit:${c.id}" },
-                            )
-                            Text("Savings goals", style = MaterialTheme.typography.titleLarge)
-                            OutlinedButton(
-                                onClick = { form = "goal" },
-                                shape = MaterialTheme.shapes.small,
-                            ) {
-                                Text("Add savings goal")
-                            }
-                            data.ledger.goals.forEach { g ->
-                                Card {
-                                    Column(Modifier.padding(16.dp)) {
-                                        Text(g.goal.name, fontWeight = FontWeight.Bold)
-                                        Text(
-                                            "${Money.format(g.savedMinor)} of ${Money.format(g.goal.targetMinor)}"
-                                        )
-                                        LinearProgressIndicator(
-                                            progress = {
-                                                (g.savedMinor.toDouble() / g.goal.targetMinor)
-                                                    .toFloat()
-                                                    .coerceIn(0f, 1f)
-                                            },
-                                            modifier = Modifier.fillMaxWidth(),
-                                        )
-                                        Text(
-                                            "Link this goal when transferring into protected savings or withdrawing back to a spendable account. Progress shows recorded contributions, not a verified account balance.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    "Shop" -> ShoppingPage(model, data, safe, busy)
-                    else -> SettingsPage(model, data) { form = it }
+                        "Activity" ->
+                            ActivityPage(view, model.repo.today, ::openPage) { draftId = it }
+                        "Plan" -> PlanPage(view, model.repo.today, scope, ::openPage)
+                        "Accounts" ->
+                            AccountsPage(view, model.repo.today, scope, ::openPage, ::selectAccount)
+                        "Shop" -> ShoppingPage(model, view, safe, busy)
+                        else -> SettingsPage(model, view) { openPage(it) }
+                    }
                 }
             }
         }
     }
+
     if (form == "scan")
         AlertDialog(
             onDismissRequest = { form = null },
@@ -666,6 +520,7 @@ private fun MainPages(
                     busy,
                     close = { draftId = null },
                     rescanned = { newId -> draftId = newId },
+                    initialAccountId = scope,
                 )
             }
     if (form == "transaction")
@@ -675,206 +530,153 @@ private fun MainPages(
             txKind,
             data.ledger.commitments.find { it.commitment.id == payCommitId }?.commitment,
             busy,
+            initialAccountId = scope,
         ) {
             form = null
             payCommitId = null
         }
     val close = { form = null }
-    when (form) {
-        "account" ->
-            SimpleForm(
-                "Add account",
-                listOf("Name", "Opening balance (J$)"),
-                listOf("", "0"),
-                busy,
-                close,
-                choices =
-                    listOf(
-                        "Type" to listOf("CASH", "CURRENT", "SAVINGS", "WALLET"),
-                        "Spendable?" to listOf("Included", "Protected"),
-                    ),
-            ) { v, c ->
-                model.act(close) {
-                    model.repo.addAccount(v[0], c[0], Money.parse(v[1], true), c[1] == "Included")
-                }
-            }
-        "goal" ->
-            SimpleForm(
-                "Savings goal",
-                listOf("Name", "Target (J$)", "Already saved elsewhere (J$)"),
-                listOf("", "", "0"),
-                busy,
-                close,
-            ) { v, _ ->
-                model.act(close) {
-                    model.repo.addGoal(v[0], Money.positive(v[1]), Money.parse(v[2]))
-                }
-            }
-        "commitment" -> {
-            val reservationKey = rememberSaveable { FinanceRepository.id() }
-            SimpleForm(
-                "Reserve money",
-                listOf("Name", "Amount (J$)", "Due date (YYYY-MM-DD; blank = protect now)"),
-                listOf("", "", ""),
-                busy,
-                close,
-                choices =
-                    listOf(
-                        "Kind" to listOf("BILL", "SAVINGS", "DEBT", "RESERVE"),
-                        "Repeat" to listOf("ONCE", "WEEKLY", "FORTNIGHTLY", "MONTHLY"),
-                    ),
-            ) { v, c ->
-                model.act(close) {
-                    model.repo.addCommitment(
-                        v[0],
-                        c[0],
-                        Money.positive(v[1]),
-                        v[2].takeIf { it.isNotBlank() }?.let(LocalDate::parse),
-                        frequency = c[1],
-                        submissionKey = reservationKey,
-                    )
-                }
-            }
-        }
-        "split" -> BudgetForm(model, data.ledger.profile!!, busy, close)
-        "payday" ->
-            SimpleForm(
-                "Start a new period",
-                listOf("Next payday (YYYY-MM-DD)"),
-                listOf(nextPayday(data.ledger.profile!!, model.repo.today).toString()),
-                busy,
-                close,
-                description =
-                    "Start the budget period today. Record received pay separately in Activity; this change adds no money.",
-            ) { v, _ ->
-                model.act(close) { model.repo.confirmPayday(LocalDate.parse(v[0]), 0) }
-            }
-        "limit" ->
-            SimpleForm(
-                "Category spending limit",
-                listOf("Category", "Limit per period (J$)"),
-                listOf("Groceries", ""),
-                busy,
-                close,
-                choices = listOf("Budget group" to listOf("NEEDS", "WANTS", "SAVINGS")),
-            ) { v, c ->
-                model.act(close) { model.repo.setCategoryLimit(v[0], c[0], Money.parse(v[1])) }
-            }
-    }
-    if (form?.startsWith("editTx:") == true) {
-        val t = data.ledger.transactions.first { it.id == form!!.substringAfter(':') }
-        SimpleForm(
-            "Edit record",
-            listOf("Description", "Category", "Date (YYYY-MM-DD)"),
-            listOf(t.description, t.category, t.date),
-            busy,
-            close,
-            choices =
-                listOf(
-                    "Budget group" to
-                        listOf(t.bucket) +
-                            listOf("NEEDS", "WANTS", "SAVINGS").filter { it != t.bucket },
-                    "Action" to listOf("Save edits", "Delete record"),
-                ),
-            description =
-                "Amounts and account movements stay together. To correct an amount, delete this record and re-enter it.",
-        ) { v, c ->
-            if (c[1] == "Delete record") form = "delete:${t.id}"
-            else
-                model.act(close) {
-                    model.repo.editRecord(t.id, v[0], v[1], c[0], LocalDate.parse(v[2]))
-                }
-        }
-    }
-    if (form?.startsWith("editAccount:") == true) {
-        val account =
-            data.ledger.accounts.first { it.account.id == form!!.substringAfter(':') }.account
-        SimpleForm(
-            "Account settings",
-            listOf("Name"),
-            listOf(account.name),
-            busy,
-            close,
-            choices =
-                listOf(
-                    "Spendable?" to
-                        if (account.included) listOf("Included", "Protected")
-                        else listOf("Protected", "Included")
-                ),
-            description =
-                "Included balances count towards safe to spend. Protected balances are excluded. This changes your plan, not the amount of money in the account.",
-        ) { v, c ->
-            model.act(close) { model.repo.editAccount(account.id, v[0], c[0] == "Included") }
-        }
-    }
-    if (form?.startsWith("editCommit:") == true)
-        data.ledger.commitments
-            .firstOrNull { it.commitment.id == form!!.substringAfter(':') }
-            ?.let { balance ->
-                val c = balance.commitment
+    key(form) {
+        when (form) {
+            "account" ->
                 SimpleForm(
-                    "Edit this reservation",
-                    listOf("Name", "Amount (J$)", "Due date (YYYY-MM-DD; optional)"),
-                    listOf(c.name, Money.input(c.amountMinor), c.dueDate ?: ""),
+                    "Add account",
+                    listOf("Name", "Opening balance (J$)"),
+                    listOf("", "0"),
                     busy,
                     close,
                     choices =
                         listOf(
-                            "Action" to
-                                listOf(
-                                    "Save edits",
-                                    if (c.occurrenceKey.contains('@')) "Cancel unpaid series"
-                                    else "Remove reservation",
-                                )
+                            "Type" to listOf("CASH", "CURRENT", "SAVINGS", "WALLET"),
+                            "Spendable?" to listOf("Included", "Protected"),
                         ),
-                    description =
-                        "Edits apply to this occurrence. Cancellation removes unpaid reservations; paid history stays.",
-                ) { v, choice ->
+                ) { v, c ->
                     model.act(close) {
-                        if (choice[0] == "Save edits")
-                            model.repo.editCommitment(
-                                c.id,
-                                v[0],
-                                Money.positive(v[1]),
-                                v[2].takeIf { it.isNotBlank() }?.let(LocalDate::parse),
-                            )
-                        else model.repo.removeCommitment(c.id)
+                        model.repo.addAccount(
+                            v[0],
+                            c[0],
+                            Money.parse(v[1], true),
+                            c[1] == "Included",
+                        )
                     }
                 }
+            "goal" ->
+                SimpleForm(
+                    "Savings goal",
+                    listOf("Name", "Target (J$)", "Already saved elsewhere (J$)"),
+                    listOf("", "", "0"),
+                    busy,
+                    close,
+                ) { v, _ ->
+                    model.act(close) {
+                        model.repo.addGoal(v[0], Money.positive(v[1]), Money.parse(v[2]))
+                    }
+                }
+            "commitment" -> ReservationEditor(model, data, null, scope, busy, close)
+            "split" -> BudgetForm(model, data.ledger.profile!!, busy, close)
+            "payday" ->
+                SimpleForm(
+                    "Start a new period",
+                    listOf("Next payday (YYYY-MM-DD)"),
+                    listOf(nextPayday(data.ledger.profile!!, model.repo.today).toString()),
+                    busy,
+                    close,
+                    description =
+                        "Start the budget period today. Record received pay separately in Activity; this change adds no money.",
+                ) { v, _ ->
+                    model.act(close) { model.repo.confirmPayday(LocalDate.parse(v[0]), 0) }
+                }
+            "limit" -> LimitEditor(model, data, null, scope, busy, close)
+        }
+        if (form?.startsWith("editLimit:") == true)
+            data.limits
+                .find { it.id == form!!.substringAfter(':') }
+                ?.let { LimitEditor(model, data, it, scope, busy, close) }
+
+        if (form?.startsWith("editTx:") == true) {
+            val t = data.ledger.transactions.first { it.id == form!!.substringAfter(':') }
+            SimpleForm(
+                "Edit record",
+                listOf("Description", "Category", "Date (YYYY-MM-DD)"),
+                listOf(t.description, t.category, t.date),
+                busy,
+                close,
+                choices =
+                    listOf(
+                        "Budget group" to
+                            listOf(t.bucket) +
+                                listOf("NEEDS", "WANTS", "SAVINGS").filter { it != t.bucket },
+                        "Action" to listOf("Save edits", "Delete record"),
+                    ),
+                description =
+                    "Amounts and account movements stay together. To correct an amount, delete this record and re-enter it.",
+            ) { v, c ->
+                if (c[1] == "Delete record") form = "delete:${t.id}"
+                else
+                    model.act(close) {
+                        model.repo.editRecord(t.id, v[0], v[1], c[0], LocalDate.parse(v[2]))
+                    }
             }
-    if (form?.startsWith("delete:") == true) {
-        val id = form!!.substringAfter(':')
-        AlertDialog(
-            onDismissRequest = close,
-            title = { Text("Delete transaction?") },
-            text = {
-                Text(
-                    "This removes the account movement, linked receipt prices and payments against bills or goals. Your balances will update."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !busy,
-                    onClick = { model.act(close) { model.repo.deleteTransaction(id) } },
-                    shape = MaterialTheme.shapes.small,
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = close,
-                    shape = MaterialTheme.shapes.small,
-                ) {
-                    Text("Keep")
-                }
-            },
-        )
+        }
+        if (form?.startsWith("editAccount:") == true) {
+            val account =
+                data.ledger.accounts.first { it.account.id == form!!.substringAfter(':') }.account
+            SimpleForm(
+                "Account settings",
+                listOf("Name"),
+                listOf(account.name),
+                busy,
+                close,
+                choices =
+                    listOf(
+                        "Spendable?" to
+                            if (account.included) listOf("Included", "Protected")
+                            else listOf("Protected", "Included")
+                    ),
+                description =
+                    "Included balances count towards safe to spend. Protected balances are excluded. This changes your plan, not the amount of money in the account.",
+            ) { v, c ->
+                model.act(close) { model.repo.editAccount(account.id, v[0], c[0] == "Included") }
+            }
+        }
+        if (form?.startsWith("editCommit:") == true)
+            data.ledger.commitments
+                .find { it.commitment.id == form!!.substringAfter(':') }
+                ?.let { ReservationEditor(model, data, it, scope, busy, close) }
+        if (form?.startsWith("delete:") == true) {
+            val id = form!!.substringAfter(':')
+            AlertDialog(
+                onDismissRequest = close,
+                title = { Text("Delete transaction?") },
+                text = {
+                    Text(
+                        "This removes the account movement, linked receipt prices and payments against bills or goals. Your balances will update."
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = !busy,
+                        onClick = { model.act(close) { model.repo.deleteTransaction(id) } },
+                        shape = MaterialTheme.shapes.small,
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = close,
+                        shape = MaterialTheme.shapes.small,
+                    ) {
+                        Text("Keep")
+                    }
+                },
+            )
+        }
+        if (form?.startsWith("receipt:") == true)
+            data.receipt.receipts
+                .find { it.id == form!!.substringAfter(':') }
+                ?.let { ReceiptDetails(model, it, busy, close) }
     }
-    if (form?.startsWith("receipt:") == true)
-        data.receipt.receipts
-            .find { it.id == form!!.substringAfter(':') }
-            ?.let { ReceiptDetails(model, it, busy, close) }
 }
 
 private fun nextPayday(p: Profile, today: LocalDate): LocalDate {
@@ -930,7 +732,7 @@ internal fun Field(label: String, value: String, change: (String) -> Unit) {
                 optional = label.contains("optional", true) || label.contains("blank", true),
                 change = change,
             )
-        label.contains("J$") -> MoneyField(label, value, change)
+        label.contains("J$") -> MoneyField(label, value, change = change)
         label.contains("pay day", true) ->
             Choice(label, value, (1..31).map { it.toString() }, change)
         label.contains("%") ||
@@ -971,15 +773,47 @@ internal fun Choice(label: String, value: String, options: List<String>, change:
 @Composable
 internal fun Record(title: String, detail: String, amount: String, click: (() -> Unit)? = null) {
     val body: @Composable () -> Unit = {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, fontWeight = FontWeight.SemiBold)
-            Text(amount.replace(",", ",\u200B"), style = MaterialTheme.typography.titleLarge)
-            Text(detail, style = MaterialTheme.typography.bodySmall)
+        Row(
+            Modifier.padding(YardSpace.lg),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(YardSpace.md),
+        ) {
+            IdentityBadge(categoryIdentity(title))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(YardSpace.xs)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(amount.replace(",", ",\u200B"), style = MaterialTheme.typography.titleLarge)
+                Text(
+                    detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (click != null) Icon(Icons.Default.ChevronRight, null)
         }
     }
     if (click != null)
-        OutlinedCard(onClick = click, modifier = Modifier.fillMaxWidth(), content = { body() })
-    else OutlinedCard(Modifier.fillMaxWidth(), content = { body() })
+        Card(
+            onClick = click,
+            modifier = Modifier.fillMaxWidth(),
+            shape = YardShape.card,
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+        ) {
+            body()
+        }
+    else
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = YardShape.card,
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+        ) {
+            body()
+        }
 }
 
 @Composable
@@ -994,14 +828,23 @@ internal fun AmountRow(label: String, amount: Long) {
 }
 
 @Composable
-private fun SafeCard(safe: SafeToSpend, payday: String) {
+internal fun SafeCard(safe: SafeToSpend, payday: String) {
     Card(
         colors =
-            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Safe to spend", style = MaterialTheme.typography.titleMedium)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(Icons.Default.AccountBalanceWallet, null)
+                Text("Safe to spend", style = MaterialTheme.typography.titleMedium)
+            }
             Text(
                 Money.format(safe.safeMinor).replace(",", ",\u200B"),
                 style = MaterialTheme.typography.displaySmall,
@@ -1011,8 +854,8 @@ private fun SafeCard(safe: SafeToSpend, payday: String) {
                 if (safe.days <= 0) "Payday has arrived. Update your plan."
                 else "${safe.days} days to payday · $payday"
             )
-            val color = MaterialTheme.colorScheme.primary
-            val base = MaterialTheme.colorScheme.surfaceVariant
+            val color = MaterialTheme.colorScheme.onPrimary
+            val base = MaterialTheme.colorScheme.onPrimary.copy(alpha = .20f)
             val motion = LocalMotion.current
             val fraction =
                 if (safe.availableMinor > 0)
@@ -1056,9 +899,12 @@ internal fun SimpleForm(
             save = { states -> states.map { it.value } },
             restore = { strings -> strings.map { mutableStateOf(it) } },
         )
-    val values = rememberSaveable(saver = stringStatesSaver) { initial.map { mutableStateOf(it) } }
+    val values =
+        rememberSaveable(title, initial, saver = stringStatesSaver) {
+            initial.map { mutableStateOf(it) }
+        }
     val selected =
-        rememberSaveable(saver = stringStatesSaver) {
+        rememberSaveable(title, choices, saver = stringStatesSaver) {
             choices.map { mutableStateOf(it.second.first()) }
         }
     AlertDialog(
@@ -1066,8 +912,8 @@ internal fun SimpleForm(
         title = { Text(title) },
         text = {
             Column(
-                Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                Modifier.verticalScroll(rememberScrollState()).padding(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 if (description != null) Text(description)
                 labels.forEachIndexed { i, label ->

@@ -37,7 +37,7 @@ class PortableBackup(private val app: YardMoneyApplication) {
         require(password.size >= 12) { "Use a backup password of at least 12 characters." }
         val root =
             app.database.withTransaction {
-                val json = JSONObject().put("version", 1)
+                val json = JSONObject().put("version", 2)
                 val images = JSONObject()
                 var used = 0L
                 tables.forEach { table ->
@@ -108,7 +108,7 @@ class PortableBackup(private val app: YardMoneyApplication) {
             } finally {
                 clear.fill(0)
             }
-        require(root.getInt("version") == 1) { "Unsupported backup version." }
+        require(root.getInt("version") in 1..2) { "Unsupported backup version." }
         require(
             root.keys().asSequence().toSet() == (tables + listOf("version", "images")).toSet()
         ) {
@@ -141,6 +141,13 @@ class PortableBackup(private val app: YardMoneyApplication) {
                     val shape = columns.getValue(table)
                     for (i in 0 until rows.length()) {
                         val row = rows.getJSONObject(i)
+                        // Backups from schema 1 have no account binding; preserve them as shared
+                        // plans.
+                        if (
+                            root.getInt("version") == 1 &&
+                                table in listOf("commitments", "bill_templates", "category_limits")
+                        )
+                            row.put("accountId", JSONObject.NULL)
                         require(row.keys().asSequence().toSet() == shape.keys) {
                             "Invalid $table columns."
                         }
@@ -168,6 +175,14 @@ class PortableBackup(private val app: YardMoneyApplication) {
                             args,
                         )
                     }
+                }
+                listOf("commitments", "bill_templates", "category_limits").forEach { table ->
+                    sql.query(
+                            "SELECT id FROM $table WHERE accountId IS NOT NULL AND accountId NOT IN (SELECT id FROM accounts)"
+                        )
+                        .use {
+                            require(!it.moveToFirst()) { "Invalid plan account." }
+                        }
                 }
                 sql.query("PRAGMA foreign_key_check").use {
                     require(!it.moveToFirst()) { "Backup relationships are invalid." }

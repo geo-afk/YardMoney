@@ -7,6 +7,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import java.time.LocalDate
@@ -52,7 +54,22 @@ class ActivityAndEntryUiTest {
             compose.onNodeWithText("Record money").fetchSemanticsNode().boundsInRoot.top,
             1f,
         )
-        compose.onNodeWithText("Detail 1").performScrollTo()
+        // ScrollTo a child aligns its label, not the padded scroll container's origin.
+        compose.onNodeWithTag("money-entry-scroll").performSemanticsAction(
+            SemanticsActions.ScrollBy
+        ) {
+            it(0f, -100000f)
+        }
+        compose.waitForIdle()
+        assertEquals(
+            0f,
+            compose
+                .onNodeWithTag("money-entry-scroll")
+                .fetchSemanticsNode()
+                .config[SemanticsProperties.VerticalScrollAxisRange]
+                .value(),
+            1f,
+        )
         compose.onNodeWithTag("money-entry-scroll").performTouchInput {
             swipe(Offset(width * .5f, height * .2f), Offset(width * .5f, height * .25f), 400)
         }

@@ -20,7 +20,9 @@ class FormDropdownUiTest {
         compose.setContent {
             YardTheme {
                 Surface {
-                    Column(Modifier.padding(16.dp)) {
+                    // Match the bounded content used by real pages; keep clear of landscape
+                    // cutouts.
+                    Column(Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(16.dp)) {
                         var selected by remember { mutableStateOf("cash") }
                         Column(Modifier.fillMaxWidth().testTag("anchor")) {
                             DropdownField(

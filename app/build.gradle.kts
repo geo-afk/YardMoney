@@ -4,16 +4,26 @@ plugins {
     id("com.google.devtools.ksp")
 }
 val demoInstall = providers.gradleProperty("demoInstall").orNull == "true"
+// Gradle removes its device-test installation; keep it separate from personal and demo data.
+val deviceTestInstall = providers.gradleProperty("deviceTestInstall").orNull == "true"
 android {
     namespace = "jm.yardmoney"
     compileSdk = 36
     defaultConfig {
-        applicationId = if (demoInstall) "jm.yardmoney.demo" else "jm.yardmoney"
-        manifestPlaceholders["appLabel"] = if (demoInstall) "YardMoney Demo" else "@string/app_name"
+        applicationId = when {
+            demoInstall -> "jm.yardmoney.demo"
+            deviceTestInstall -> "jm.yardmoney.testhost"
+            else -> "jm.yardmoney"
+        }
+        manifestPlaceholders["appLabel"] = when {
+            demoInstall -> "YardMoney Demo"
+            deviceTestInstall -> "YardMoney Test"
+            else -> "@string/app_name"
+        }
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.3.6"
+        versionCode = 11
+        versionName = "0.4.0"
         testInstrumentationRunner = if (demoInstall) "jm.yardmoney.demo.DemoDataInstaller" else "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true }
@@ -24,6 +34,7 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
+    sourceSets.getByName("androidTest").assets.directories.add("$projectDir/schemas")
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }

@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.*
 import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Velocity
@@ -38,7 +39,11 @@ internal fun MoneyEntrySheet(
         )
     val scroll = rememberScrollState()
     val latestClose by rememberUpdatedState(close)
-    val pullThreshold = with(LocalDensity.current) { 120.dp.toPx() }
+    var viewportHeight by remember { mutableIntStateOf(0) }
+    val defaultThreshold = with(LocalDensity.current) { 120.dp.toPx() }
+    // A deliberate second pull must remain reachable in landscape and above the keyboard.
+    val pullThreshold =
+        if (viewportHeight > 0) minOf(defaultThreshold, viewportHeight * .45f) else defaultThreshold
     val gate = remember(pullThreshold) { FormDismissGate(pullThreshold) }
     val scrollConnection =
         remember(scroll, gate) {
@@ -97,6 +102,7 @@ internal fun MoneyEntrySheet(
                 Modifier.weight(1f)
                     .fillMaxWidth()
                     .testTag("money-entry-scroll")
+                    .onSizeChanged { viewportHeight = it.height }
                     .pointerInput(scroll, gate) {
                         awaitEachGesture {
                             awaitFirstDown(

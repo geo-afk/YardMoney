@@ -35,8 +35,10 @@ internal fun ReceiptDetails(model: AppModel, receipt: Receipt, busy: Boolean, cl
                     )
                     AmountRow("Reviewed total", receipt.totalMinor)
                     items.forEach {
-                        Text(
-                            "${it.confirmedName} × ${it.quantity} · ${Money.format(it.totalMinor)}"
+                        Record(
+                            it.confirmedName,
+                            "Quantity " + it.quantity,
+                            Money.format(it.totalMinor),
                         )
                     }
                     if (items.isEmpty()) Text("Total-only expense: no product prices were stored.")

@@ -59,7 +59,7 @@ internal fun Appearance.isDark(system: Boolean) =
 
 internal fun customColors(appearance: Appearance, dark: Boolean): ColorScheme {
     val black = appearance.mode == "AMOLED"
-    val surface = Color(if (black) 0xFF000000 else if (dark) 0xFF121318 else 0xFFFAFAFC)
+    val surface = Color(if (black) 0xFF000000 else if (dark) 0xFF121318 else 0xFFF4F7F5)
     fun tint(f: Double) = Color(ColorContrast.blend(surface.toArgb(), appearance.accent, f))
     val contrastSurface = if (dark) 0xFF30323B.toInt() else 0xFFE3E4EC.toInt()
     val primary = Color(ColorContrast.readable(appearance.accent, contrastSurface))
@@ -90,7 +90,7 @@ internal fun customColors(appearance: Appearance, dark: Boolean): ColorScheme {
                 if (black) Color.Black else if (dark) Color(0xFF121318) else Color(0xFFDFE0E7),
             surfaceBright = if (dark) Color(0xFF34363E) else Color.White,
             surfaceContainerLowest = if (dark) Color.Black else Color.White,
-            surfaceContainerLow = if (dark) Color(0xFF191B21) else Color(0xFFF4F4F8),
+            surfaceContainerLow = if (dark) Color(0xFF19231F) else Color(0xFFFFFFFF),
             surfaceContainer = if (dark) Color(0xFF202229) else Color(0xFFF0F0F5),
             surfaceContainerHigh = if (dark) Color(0xFF282A32) else Color(0xFFEAEAF1),
             surfaceContainerHighest = if (dark) Color(0xFF30323B) else Color(0xFFE3E4EC),
@@ -122,6 +122,16 @@ private fun accessibleColors(c: ColorScheme) =
 
 private val YardTypography =
     Typography(
+        displaySmall =
+            TextStyle(fontSize = 38.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold),
+        headlineLarge =
+            TextStyle(fontSize = 32.sp, lineHeight = 40.sp, fontWeight = FontWeight.Bold),
+        headlineSmall =
+            TextStyle(fontSize = 24.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold),
+        titleLarge =
+            TextStyle(fontSize = 21.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold),
+        titleMedium =
+            TextStyle(fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold),
         bodyLarge = TextStyle(fontSize = 17.sp, lineHeight = 26.sp),
         bodyMedium = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
         bodySmall = TextStyle(fontSize = 14.sp, lineHeight = 21.sp),
@@ -161,7 +171,7 @@ internal fun YardTheme(content: @Composable () -> Unit) {
                 extraSmall = RoundedCornerShape(appearance.corners.radius.dp),
                 small = RoundedCornerShape(appearance.corners.radius.dp),
                 medium = RoundedCornerShape((appearance.corners.radius + 8).dp),
-                large = RoundedCornerShape(28.dp),
+                large = RoundedCornerShape((appearance.corners.radius + 16).dp),
                 extraLarge = RoundedCornerShape(32.dp),
             ),
         content = {

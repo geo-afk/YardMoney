@@ -19,7 +19,11 @@ internal fun budgetUsage(data: FinanceSnapshot, today: LocalDate): BudgetUsage {
             }
             .toMutableList()
     val savingsAccounts =
-        data.ledger.accounts.filter { it.account.kind == "SAVINGS" }.map { it.account.id }.toSet()
+        data.savingsAccountIds
+            ?: data.ledger.accounts
+                .filter { it.account.kind == "SAVINGS" }
+                .map { it.account.id }
+                .toSet()
     val transfers = current.filter { it.kind == "TRANSFER" }.map { it.id }.toSet()
     val saved =
         Money.sum(

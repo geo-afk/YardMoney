@@ -61,7 +61,10 @@ class MainActivity : FragmentActivity() {
         }
         biometricPrompt = createBiometricPrompt()
         enableEdgeToEdge()
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        // The isolated fictional demo allows design verification; real financial screens stay
+        // protected.
+        if (!BuildConfig.APPLICATION_ID.endsWith(".demo"))
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         setContent {
             if (locked)
                 YardTheme {

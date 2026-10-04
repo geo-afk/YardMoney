@@ -94,9 +94,12 @@ internal fun ActivityExplorer(
 ) {
     var kind by rememberSaveable { mutableStateOf("EXPENSE") }
     var range by rememberSaveable { mutableStateOf("PERIOD") }
+    var query by rememberSaveable { mutableStateOf("") }
     val records =
-        remember(transactions, kind, range, periodStart, today) {
-            activityRecords(transactions, kind, range, periodStart, today)
+        remember(transactions, kind, range, periodStart, today, query) {
+            activityRecords(transactions, kind, range, periodStart, today).filter {
+                (it.description + " " + it.category + " " + it.date).contains(query, true)
+            }
         }
     val start =
         when (range) {
@@ -122,6 +125,7 @@ internal fun ActivityExplorer(
                     )
                 }
             }
+            Field("Search transactions", query) { query = it }
             DropdownField("Date range", range, activityRanges) { range = it }
             AmountRow(
                 if (kind == "ADJUSTMENT") "Net adjustments" else "$label total",
@@ -171,7 +175,7 @@ private fun ActivityColumnChart(bins: List<ActivityBin>, kind: String) {
     val negative = bins.minOf { it.amount }.coerceAtMost(0).toDouble()
     val span = (positive - negative).coerceAtLeast(1.0)
     val baseline = (positive / span).toFloat()
-    val primary = chartColors().first()
+    val primary = identityColor(categoryIdentity(kind))
     val negativeColor = MaterialTheme.colorScheme.error
     val lineColor = MaterialTheme.colorScheme.outlineVariant
     val dateFormat = remember { DateTimeFormatter.ofPattern("MMM d") }

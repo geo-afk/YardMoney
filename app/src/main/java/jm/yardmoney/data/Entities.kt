@@ -104,6 +104,7 @@ data class Commitment(
     val amountMinor: Long,
     val dueDate: String?,
     val goalId: String? = null,
+    val accountId: String? = null,
 )
 
 @Entity(
@@ -147,6 +148,7 @@ data class BillTemplate(
     val frequency: String,
     val anchorDay: Int,
     val active: Boolean = true,
+    val accountId: String? = null,
 )
 
 @Entity(tableName = "goals")
@@ -315,4 +317,5 @@ data class CategoryLimit(
     val category: String,
     val bucket: String,
     val limitMinor: Long,
+    val accountId: String? = null,
 )

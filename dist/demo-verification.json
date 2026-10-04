@@ -1,18 +1,18 @@
 {
   "applicationId": "jm.yardmoney.demo",
-  "version": "0.3.6",
-  "date": "2026-10-02",
-  "artifact": "YardMoney-0.3.6-demo-debug.apk",
-  "bytes": 73032724,
-  "sha256": "d47b3de3b46394fbf7e13b691111e2df3cea1c093a0f3ae94043d2f043708c34",
+  "version": "0.4.0",
+  "date": "2026-10-03",
+  "artifact": "YardMoney-0.4.0-demo-debug.apk",
+  "bytes": 73163796,
+  "sha256": "f562e8e0154d11b1e37589916a4d8a55cc4918a44b0024d56cd7ea5b9ec7226b",
   "device": "Pixel 8 Pro",
   "seededTransactions": 434,
   "accounts": 4,
   "reservationOccurrences": 12,
   "goals": 3,
   "receipts": 18,
-  "shoppingItems": 24,
-  "repeatLoading": "verified same counts",
-  "launch": "verified populated Home via UI hierarchy",
-  "notes": "docs/18-demo-data.md"
+  "shoppingItems": 23,
+  "repeatLoading": "verified migration/update preserved existing demo records and one J$12.34 smoke expense",
+  "launch": "verified redesigned Home and navigation",
+  "transactionsAfterSmokeCheck": 435
 }
