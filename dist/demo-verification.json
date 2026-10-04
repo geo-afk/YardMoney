@@ -1,18 +1,19 @@
 {
   "applicationId": "jm.yardmoney.demo",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "date": "2026-10-03",
-  "artifact": "YardMoney-0.4.0-demo-debug.apk",
-  "bytes": 73163796,
-  "sha256": "f562e8e0154d11b1e37589916a4d8a55cc4918a44b0024d56cd7ea5b9ec7226b",
+  "artifact": "YardMoney-0.4.1-demo.apk",
+  "bytes": 73311252,
+  "sha256": "9adf21f1c4a67cd3c939e11a40aaab4e4d5a4032f2f1fdbcae7c2c7746432d9c",
   "device": "Pixel 8 Pro",
   "seededTransactions": 434,
   "accounts": 4,
   "reservationOccurrences": 12,
   "goals": 3,
-  "receipts": 18,
-  "shoppingItems": 23,
-  "repeatLoading": "verified migration/update preserved existing demo records and one J$12.34 smoke expense",
-  "launch": "verified redesigned Home and navigation",
-  "transactionsAfterSmokeCheck": 435
+  "receipts": 19,
+  "shoppingItems": 25,
+  "repeatLoading": "Verified in-place update preserved original seed and subsequent manually added demo records; temporary Shop smoke lists removed.",
+  "launch": "Verified Shop create/search/catalog/new-item/receipt/save/edit/check/duplicate/rename/delete/undo, swipe undo retained restored row, and landscape adaptation.",
+  "transactionsAfterSmokeCheck": 436,
+  "databaseSchemaVersion": 3
 }

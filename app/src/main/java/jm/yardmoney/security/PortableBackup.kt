@@ -37,7 +37,7 @@ class PortableBackup(private val app: YardMoneyApplication) {
         require(password.size >= 12) { "Use a backup password of at least 12 characters." }
         val root =
             app.database.withTransaction {
-                val json = JSONObject().put("version", 2)
+                val json = JSONObject().put("version", 3)
                 val images = JSONObject()
                 var used = 0L
                 tables.forEach { table ->
@@ -108,7 +108,7 @@ class PortableBackup(private val app: YardMoneyApplication) {
             } finally {
                 clear.fill(0)
             }
-        require(root.getInt("version") in 1..2) { "Unsupported backup version." }
+        require(root.getInt("version") in 1..3) { "Unsupported backup version." }
         require(
             root.keys().asSequence().toSet() == (tables + listOf("version", "images")).toSet()
         ) {
@@ -148,6 +148,13 @@ class PortableBackup(private val app: YardMoneyApplication) {
                                 table in listOf("commitments", "bill_templates", "category_limits")
                         )
                             row.put("accountId", JSONObject.NULL)
+                        if (root.getInt("version") < 3) {
+                            if (table == "shopping_lists") row.put("createdDate", JSONObject.NULL)
+                            if (table == "shopping_items") {
+                                row.put("category", "Other")
+                                row.put("note", "")
+                            }
+                        }
                         require(row.keys().asSequence().toSet() == shape.keys) {
                             "Invalid $table columns."
                         }
@@ -275,9 +282,27 @@ class PortableBackup(private val app: YardMoneyApplication) {
                         require(c.getInt(2) == 1)
                     }
                 }
-                sql.query("SELECT quantity FROM shopping_items").use { c ->
-                    while (c.moveToNext()) Quantity.parse(c.getString(0))
-                }
+                // Schema-1/2 backups preserve their selected receipt estimates just like the Room
+                // migration.
+                if (root.getInt("version") < 3)
+                    sql.execSQL(
+                        "UPDATE shopping_items SET manualPriceMinor=(SELECT packPriceMinor FROM price_observations p WHERE p.productKey=shopping_items.productKey ORDER BY p.date DESC,p.rowid DESC LIMIT 1) WHERE manualPriceMinor IS NULL AND productKey IS NOT NULL"
+                    )
+                sql.query("SELECT quantity,manualPriceMinor,category,note FROM shopping_items")
+                    .use { c ->
+                        while (c.moveToNext()) {
+                            Quantity.parse(c.getString(0))
+                            if (!c.isNull(1)) {
+                                require(c.getLong(1) in 0..Money.MAX_MINOR)
+                                Quantity.estimate(c.getLong(1), c.getString(0))
+                            }
+                            require(c.getString(2).length in 1..120 && c.getString(3).length <= 500)
+                        }
+                    }
+                sql.query("SELECT createdDate FROM shopping_lists WHERE createdDate IS NOT NULL")
+                    .use { c ->
+                        while (c.moveToNext()) LocalDate.parse(c.getString(0))
+                    }
                 sql.query(
                         "SELECT firstDate,frequency,anchorDay,amountMinor,active FROM bill_templates"
                     )

@@ -171,7 +171,20 @@ interface FinanceDao {
 
     @Insert suspend fun insert(list: ShoppingList)
 
+    @Upsert suspend fun put(list: ShoppingList)
+
+    @Query("SELECT * FROM shopping_lists WHERE id=:id")
+    suspend fun shoppingList(id: String): ShoppingList?
+
+    @Query("DELETE FROM shopping_lists WHERE id=:id") suspend fun deleteShoppingList(id: String)
+
+    @Query("DELETE FROM shopping_items WHERE listId=:listId")
+    suspend fun clearShoppingItems(listId: String)
+
     @Upsert suspend fun put(item: ShoppingItem)
+
+    @Query("UPDATE shopping_items SET checked=:checked WHERE id=:id AND checked=:expected")
+    suspend fun setShoppingChecked(id: String, checked: Boolean, expected: Boolean)
 
     @Query("DELETE FROM shopping_items WHERE id=:id") suspend fun deleteShoppingItem(id: String)
 

@@ -61,7 +61,13 @@ class LiveBudgetAndBillsUiTest {
             )
             val cash = repo.snapshot.first().ledger.accounts.single().account.id
             compose.setContent {
-                val data by repo.snapshot.collectAsState(initial = null)
+                // Room emits on its executor; keep the test's UI producer on Android's main thread,
+                // matching the lifecycle collectors used by the application.
+                val data by
+                    repo.snapshot.collectAsState(
+                        initial = null,
+                        context = kotlinx.coroutines.Dispatchers.Main.immediate,
+                    )
                 YardTheme {
                     Surface {
                         Column(Modifier.verticalScroll(rememberScrollState())) {

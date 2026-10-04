@@ -200,14 +200,7 @@ private fun MainPages(
         prefs.edit { putString("account_scope", id) }
     }
     val safe = safe(view, model.repo.today)
-    val snack = remember { SnackbarHostState() }
-    val success by model.success.collectAsStateWithLifecycle()
-    LaunchedEffect(success) {
-        success?.let {
-            model.success.value = null
-            snack.showSnackbar(it)
-        }
-    }
+    val snack = rememberSuccessSnackbar(model.success)
     val icons =
         listOf(
             Icons.Default.Home,
@@ -451,7 +444,7 @@ private fun MainPages(
                         "Plan" -> PlanPage(view, model.repo.today, scope, ::openPage)
                         "Accounts" ->
                             AccountsPage(view, model.repo.today, scope, ::openPage, ::selectAccount)
-                        "Shop" -> ShoppingPage(model, view, safe, busy)
+                        "Shop" -> ShoppingPage(model, view, safe, busy, snack)
                         else -> SettingsPage(model, view) { openPage(it) }
                     }
                 }

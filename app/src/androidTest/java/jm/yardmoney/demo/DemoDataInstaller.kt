@@ -32,8 +32,13 @@ class DemoDataInstaller : Instrumentation() {
                         if (app.repository.dao.getProfile() == null) seed(app.repository)
                     }
                     val data = app.repository.snapshot.first()
-                    check(data.ledger.transactions.size >= 400)
-                    check(data.receipt.receipts.size == 18)
+                    check(data.ledger.transactions.size >= 400) {
+                        "Expected at least 400 demo transactions; found ${data.ledger.transactions.size}."
+                    }
+                    // Additional manual demo receipts are preserved on repeat installs.
+                    check(data.receipt.receipts.size >= 18) {
+                        "Expected at least 18 demo receipts; found ${data.receipt.receipts.size}."
+                    }
                     result.putString(
                         "summary",
                         "Loaded " +

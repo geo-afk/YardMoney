@@ -600,7 +600,7 @@ class FinanceRepository(private val db: YardDatabase) {
 
     suspend fun createList(name: String) {
         require(name.isNotBlank())
-        dao.insert(ShoppingList(id(), name.trim().take(120)))
+        dao.insert(ShoppingList(id(), name.trim().take(120), today.toString()))
     }
 
     suspend fun addListItem(
@@ -619,6 +619,51 @@ class FinanceRepository(private val db: YardDatabase) {
     }
 
     suspend fun toggleItem(item: ShoppingItem) = dao.put(item.copy(checked = !item.checked))
+
+    suspend fun saveShoppingList(
+        list: ShoppingList,
+        items: List<ShoppingItem>,
+        replacing: Boolean = false,
+    ) = db.withTransaction {
+        require(list.name.trim().length in 1..120) {
+            "Use a list name between 1 and 120 characters."
+        }
+        require(items.isNotEmpty()) { "Add at least one item." }
+        require(items.map { it.id }.distinct().size == items.size)
+        items.forEach {
+            require(it.listId == list.id && it.name.trim().length in 1..120)
+            require(it.category.isNotBlank() && it.category.length <= 120 && it.note.length <= 500)
+            Quantity.parse(it.quantity)
+            require(it.manualPriceMinor == null || it.manualPriceMinor in 0..Money.MAX_MINOR)
+            it.manualPriceMinor?.let { price -> Quantity.estimate(price, it.quantity) }
+        }
+        Money.sum(
+            items.mapNotNull {
+                it.manualPriceMinor?.let { price -> Quantity.estimate(price, it.quantity) }
+            }
+        )
+        // A stable draft ID makes retrying a completed save idempotent, never a duplicate list.
+        if (!replacing && dao.shoppingList(list.id) != null) return@withTransaction
+        dao.put(list.copy(name = list.name.trim()))
+        dao.clearShoppingItems(list.id)
+        items.forEach { dao.put(it) }
+    }
+
+    suspend fun restoreShoppingList(list: ShoppingList, items: List<ShoppingItem>) =
+        db.withTransaction {
+            dao.put(list)
+            items.forEach { dao.put(it) }
+        }
+
+    suspend fun duplicateShoppingList(list: ShoppingList, items: List<ShoppingItem>) {
+        val copy =
+            list.copy(
+                id = id(),
+                name = (list.name.take(113) + " (copy)"),
+                createdDate = today.toString(),
+            )
+        saveShoppingList(copy, items.map { it.copy(id = id(), listId = copy.id, checked = false) })
+    }
 
     suspend fun setCategoryLimit(
         category: String,

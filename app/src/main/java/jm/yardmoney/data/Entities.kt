@@ -285,7 +285,11 @@ data class PriceObservation(
 )
 
 @Entity(tableName = "shopping_lists")
-data class ShoppingList(@PrimaryKey val id: String, val name: String)
+data class ShoppingList(
+    @PrimaryKey val id: String,
+    val name: String,
+    val createdDate: String? = null,
+)
 
 @Entity(
     tableName = "shopping_items",
@@ -309,6 +313,8 @@ data class ShoppingItem(
     val manualPriceMinor: Long?,
     val optional: Boolean,
     val checked: Boolean = false,
+    @ColumnInfo(defaultValue = "'Other'") val category: String = "Other",
+    @ColumnInfo(defaultValue = "''") val note: String = "",
 )
 
 @Entity(tableName = "category_limits")
