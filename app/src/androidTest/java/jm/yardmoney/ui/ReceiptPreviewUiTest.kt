@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.lifecycle.ViewModelProvider
@@ -38,6 +40,50 @@ class ReceiptPreviewUiTest {
             "fingerprint",
             null,
         )
+
+    @Test
+    fun layoutChoiceChangesReceiptStructureAndPreviewDensity() {
+        val selected = mutableStateOf(ReceiptLayout.Thermal)
+        val thumbnail = mutableStateOf(false)
+        val receipt = savedReceiptPreview(receipt(), emptyList())
+        compose.setContent {
+            YardTheme {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    ShopReceipt(
+                        receipt,
+                        Modifier.testTag("layout-receipt"),
+                        ReceiptAppearance(layout = selected.value),
+                        thumbnail = thumbnail.value,
+                    )
+                }
+            }
+        }
+        // The choice must change the product hierarchy in both the actual receipt and settings
+        // preview.
+        for (preview in listOf(false, true)) {
+            compose.runOnIdle {
+                thumbnail.value = preview
+                selected.value = ReceiptLayout.Thermal
+            }
+            compose.onNodeWithText("ITEM / QTY × PRICE").assertExists()
+            compose.onNodeWithText("RICE").assertExists()
+            compose.runOnIdle { selected.value = ReceiptLayout.Minimal }
+            compose.onNodeWithText("ITEM / QTY × PRICE").assertDoesNotExist()
+            compose.onNodeWithText("RICE").assertExists()
+            val minimalHeight =
+                compose.onNodeWithTag("layout-receipt").fetchSemanticsNode().boundsInRoot.height
+            compose.runOnIdle { selected.value = ReceiptLayout.Compact }
+            compose.onNodeWithText("ITEM / QTY").assertExists()
+            compose.onNodeWithText("1 × RICE").assertExists()
+            val compactHeight =
+                compose.onNodeWithTag("layout-receipt").fetchSemanticsNode().boundsInRoot.height
+            assertTrue("Compact must be visibly denser than Minimal", compactHeight < minimalHeight)
+            compose.runOnIdle { selected.value = ReceiptLayout.Detailed }
+            compose.onNodeWithText("PURCHASE DETAILS").assertExists()
+            compose.onAllNodesWithText("Quantity").assertCountEquals(3)
+            compose.onAllNodesWithText("Line total").assertCountEquals(3)
+        }
+    }
 
     @Test
     fun oldTotalOnlyReceiptShowsCapturedItemsInsidePreviewWithoutRawScanDump() {

@@ -203,7 +203,7 @@ internal fun AppearancePanel() {
         prefs.edit().putString("motion", it).apply()
     }
     Text(
-        "Calm fades details, Slide moves between category views, and Expressive gently scales details and smooths charts. Off removes app transitions. Main navigation switches immediately. Android’s reduced-motion setting is respected.",
+        "Calm softly fades between menus. Slide adds a small upward glide, and Expressive adds a gentle zoom and smooths charts. Off switches views immediately. Android’s animation setting is respected.",
         style = MaterialTheme.typography.bodySmall,
     )
     Choice("Appearance", appearance.mode, listOf("System", "Light", "Dark", "AMOLED")) {

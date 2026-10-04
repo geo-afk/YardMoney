@@ -1,9 +1,12 @@
 package jm.yardmoney.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -48,58 +51,86 @@ internal fun ShopReceipt(
         )
     val ink = Color(receiptInk(background))
     val thermal = appearance.layout == ReceiptLayout.Thermal
-    val compact = appearance.layout == ReceiptLayout.Compact || thumbnail
+    val compact = appearance.layout == ReceiptLayout.Compact
+    val minimal = appearance.layout == ReceiptLayout.Minimal
+    val detailed = appearance.layout == ReceiptLayout.Detailed
     val font = if (thermal) FontFamily.Monospace else FontFamily.Default
     // Repair all text and rules against arbitrary paper colors to WCAG 4.5:1.
     androidx.compose.runtime.CompositionLocalProvider(LocalContentColor provides ink) {
         Surface(
             modifier.fillMaxWidth(),
-            shape = if (thermal) ReceiptPaper else MaterialTheme.shapes.medium,
+            shape =
+                if (thermal) ReceiptPaper
+                else if (compact) RoundedCornerShape(4.dp) else MaterialTheme.shapes.medium,
             color = Color(background),
             contentColor = ink,
             tonalElevation = 0.dp,
         ) {
             Column(
                 Modifier.padding(
-                    horizontal = if (compact) 12.dp else 20.dp,
-                    vertical = if (compact) 12.dp else 28.dp,
+                    horizontal = if (compact) 12.dp else if (minimal) 24.dp else 20.dp,
+                    vertical = if (compact) 12.dp else if (thumbnail) 16.dp else 28.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 12.dp),
             ) {
-                Text(
-                    "YARDMONEY",
-                    Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                    fontFamily = font,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Text(
-                    model.name,
-                    Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                    fontFamily = font,
-                )
-                Text(
-                    model.date ?: "Not specified",
-                    Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                    fontFamily = font,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                ReceiptRule()
-                Row(Modifier.fillMaxWidth()) {
+                // Thumbnail previews use the actual layout hierarchy, not a shared compact
+                // template.
+                if (compact) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            model.name,
+                            Modifier.weight(1f),
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            model.date ?: "Not specified",
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                } else {
+                    val alignment = if (thermal) TextAlign.Center else TextAlign.Start
                     Text(
-                        "ITEM / QTY × PRICE",
-                        Modifier.weight(1f),
+                        if (detailed) "PURCHASE DETAILS" else "YARDMONEY",
+                        Modifier.fillMaxWidth(),
+                        textAlign = alignment,
                         fontFamily = font,
-                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelMedium,
                     )
                     Text(
-                        "TOTAL",
+                        model.name,
+                        Modifier.fillMaxWidth(),
+                        textAlign = alignment,
                         fontFamily = font,
-                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        style =
+                            if (minimal) MaterialTheme.typography.headlineSmall
+                            else MaterialTheme.typography.titleLarge,
                     )
+                    Text(
+                        model.date ?: "Not specified",
+                        Modifier.fillMaxWidth(),
+                        textAlign = alignment,
+                        fontFamily = font,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                if (thermal) ReceiptRule() else if (!minimal) HorizontalDivider(color = ink)
+                if (thermal || compact) {
+                    Row(Modifier.fillMaxWidth()) {
+                        Text(
+                            if (compact) "ITEM / QTY" else "ITEM / QTY × PRICE",
+                            Modifier.weight(1f),
+                            fontFamily = font,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                        Text(
+                            "TOTAL",
+                            fontFamily = font,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
                 }
                 val lines =
                     if (appearance.layout == ReceiptLayout.Detailed)
@@ -108,41 +139,117 @@ internal fun ShopReceipt(
                 if (lines.isEmpty())
                     Text("No item lines were captured.", style = MaterialTheme.typography.bodySmall)
                 lines.forEachIndexed { index, line ->
-                    if (
-                        appearance.layout == ReceiptLayout.Detailed &&
-                            (index == 0 || lines[index - 1].item.category != line.item.category)
-                    )
-                        Text(line.item.category, fontWeight = FontWeight.Bold)
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            line.item.name,
-                            fontFamily = font,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement =
-                                Arrangement.spacedBy(if (compact) 4.dp else 12.dp),
-                        ) {
-                            Text(
-                                "${if (line.quantitySpecified) line.item.quantity else "Not specified"} × ${line.price?.let(Money::format) ?: "Not specified"}",
-                                Modifier.weight(1f),
-                                fontFamily = font,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text(
-                                line.total?.let(Money::format) ?: "Not specified",
-                                Modifier.widthIn(max = 140.dp),
-                                textAlign = TextAlign.End,
-                                fontFamily = font,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
+                    when (appearance.layout) {
+                        ReceiptLayout.Thermal -> ReceiptProduct(line, font)
+                        ReceiptLayout.Minimal -> {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(line.item.name, fontWeight = FontWeight.Medium)
+                                    Text(
+                                        receiptQuantityPrice(line),
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    if (line.item.note.isNotBlank())
+                                        Text(
+                                            line.item.note,
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                }
+                                Text(
+                                    line.total?.let(Money::format) ?: "Not specified",
+                                    Modifier.widthIn(max = 140.dp),
+                                    textAlign = TextAlign.End,
+                                )
+                            }
+                            if (index < lines.lastIndex) Spacer(Modifier.height(4.dp))
                         }
-                        if (line.item.note.isNotBlank())
-                            Text(line.item.note, style = MaterialTheme.typography.bodySmall)
+                        ReceiptLayout.Compact -> {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        "${if (line.quantitySpecified) line.item.quantity + " × " else ""}${line.item.name}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    Text(
+                                        "Unit: ${line.price?.let(Money::format) ?: "Not specified"}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                    )
+                                    if (line.item.note.isNotBlank())
+                                        Text(
+                                            line.item.note,
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                }
+                                Text(
+                                    line.total?.let(Money::format) ?: "Not specified",
+                                    Modifier.widthIn(max = 140.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textAlign = TextAlign.End,
+                                )
+                            }
+                        }
+                        ReceiptLayout.Detailed -> {
+                            if (
+                                index == 0 || lines[index - 1].item.category != line.item.category
+                            ) {
+                                Text(
+                                    line.item.category,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                            }
+                            Surface(
+                                Modifier.fillMaxWidth(),
+                                color = Color(background),
+                                contentColor = ink,
+                                border = BorderStroke(1.dp, ink.copy(alpha = .35f)),
+                                shape = RoundedCornerShape(8.dp),
+                            ) {
+                                Column(
+                                    Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Text(line.item.name, fontWeight = FontWeight.Bold)
+                                    Row(
+                                        Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                "Quantity",
+                                                style = MaterialTheme.typography.labelSmall,
+                                            )
+                                            Text(
+                                                if (line.quantitySpecified) line.item.quantity
+                                                else "Not specified"
+                                            )
+                                        }
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                "Unit price",
+                                                style = MaterialTheme.typography.labelSmall,
+                                            )
+                                            Text(line.price?.let(Money::format) ?: "Not specified")
+                                        }
+                                    }
+                                    if (line.item.note.isNotBlank())
+                                        Text(
+                                            line.item.note,
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    ReceiptTotal("Line total", line.total, true, FontFamily.Default)
+                                }
+                            }
+                        }
                     }
                 }
-                ReceiptRule()
+                if (thermal) ReceiptRule() else HorizontalDivider(color = ink)
                 ReceiptTotal(
                     if (model.scanned) "Subtotal" else "Subtotal (priced items)",
                     if (model.scanned) model.recordedSubtotal else model.subtotal,
@@ -152,6 +259,7 @@ internal fun ShopReceipt(
                     else if (model.missing > 0) "Partial estimated total" else "Estimated total",
                     if (model.scanned) model.actualTotal else model.subtotal,
                     true,
+                    font,
                 )
                 if (model.missing > 0)
                     Text(
@@ -171,20 +279,52 @@ internal fun ShopReceipt(
     }
 }
 
+private fun receiptQuantityPrice(line: ShopReceiptLine): String =
+    "${if (line.quantitySpecified) line.item.quantity else "Not specified"} × ${line.price?.let(Money::format) ?: "Not specified"}"
+
 @Composable
-private fun ReceiptTotal(label: String, total: Long?, bold: Boolean = false) {
+private fun ReceiptProduct(line: ShopReceiptLine, font: FontFamily) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(line.item.name, fontFamily = font, fontWeight = FontWeight.Medium)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                receiptQuantityPrice(line),
+                Modifier.weight(1f),
+                fontFamily = font,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                line.total?.let(Money::format) ?: "Not specified",
+                Modifier.widthIn(max = 140.dp),
+                textAlign = TextAlign.End,
+                fontFamily = font,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (line.item.note.isNotBlank())
+            Text(line.item.note, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun ReceiptTotal(
+    label: String,
+    total: Long?,
+    bold: Boolean = false,
+    font: FontFamily = FontFamily.Default,
+) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             label,
             Modifier.weight(1f),
-            fontFamily = FontFamily.Monospace,
+            fontFamily = font,
             fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
         )
         Text(
             total?.let(Money::format) ?: "Not specified",
             Modifier.widthIn(max = 160.dp),
             textAlign = TextAlign.End,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = font,
             fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
         )
     }

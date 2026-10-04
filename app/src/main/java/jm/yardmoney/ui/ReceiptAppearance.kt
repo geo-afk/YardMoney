@@ -57,8 +57,8 @@ internal fun ReceiptSettings() {
     val settings = rememberReceiptAppearance()
     val sample =
         ShopReceiptModel(
-            "Preview",
-            null,
+            "Demo Market",
+            "2026-10-04",
             listOf(
                 ShopReceiptLine(
                     ShoppingItem(
@@ -86,6 +86,15 @@ internal fun ReceiptSettings() {
         ) {
             Column {
                 Text(if (settings.layout == layout) "Selected: ${layout.name}" else layout.name)
+                Text(
+                    when (layout) {
+                        ReceiptLayout.Thermal -> "Classic paper receipt with a torn edge"
+                        ReceiptLayout.Minimal -> "Open spacing with item totals alongside"
+                        ReceiptLayout.Compact -> "Dense rows for a quick overview"
+                        ReceiptLayout.Detailed -> "Product cards grouped by category"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
                 ShopReceipt(sample, appearance = settings.copy(layout = layout), thumbnail = true)
             }
         }

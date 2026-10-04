@@ -4,9 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
@@ -322,15 +320,7 @@ private fun MainPages(
                         }
                     }
                 }
-            AnimatedContent(
-                targetState = tab,
-                modifier = Modifier.weight(1f),
-                transitionSpec = {
-                    androidx.compose.animation.EnterTransition.None togetherWith
-                        androidx.compose.animation.ExitTransition.None
-                },
-                label = "Page transition",
-            ) { destination ->
+            MenuTransition(destination = tab, modifier = Modifier.weight(1f)) { destination ->
                 fun openPage(route: String) {
                     when {
                         route == "accounts" -> tab = "Accounts"
