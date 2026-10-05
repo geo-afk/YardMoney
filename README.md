@@ -84,11 +84,11 @@ Captured from YardMoney 0.4.2 Demo on a Pixel 8 Pro using fictional records and 
 
 | Home | Activity | Plan |
 | :---: | :---: | :---: |
-| [<img src="docs/screenshots/home.png" alt="Home dashboard showing safe-to-spend money and payday guidance" width="240">](docs/screenshots/home.png) | [<img src="docs/screenshots/activity.png" alt="Activity screen with record filters, search and totals" width="240">](docs/screenshots/activity.png) | [<img src="docs/screenshots/plan.png" alt="Plan screen with needs, wants and savings budget chart" width="240">](docs/screenshots/plan.png) |
+| [<img src="docs/screenshots/home-app-only.png" alt="Home dashboard showing safe-to-spend money and payday guidance" width="240">](docs/screenshots/home-app-only.png) | [<img src="docs/screenshots/activity-app-only.png" alt="Activity screen with record filters, search and totals" width="240">](docs/screenshots/activity-app-only.png) | [<img src="docs/screenshots/plan-app-only.png" alt="Plan screen with needs, wants and savings budget chart" width="240">](docs/screenshots/plan-app-only.png) |
 
 | Shop | Shopping lists | More |
 | :---: | :---: | :---: |
-| [<img src="docs/screenshots/shop.png" alt="Shop screen with expandable shopping lists and saved items" width="240">](docs/screenshots/shop.png) | [<img src="docs/screenshots/shopping-lists.png" alt="Saved demo shopping lists with estimated costs and pickup progress" width="240">](docs/screenshots/shopping-lists.png) | [<img src="docs/screenshots/more.png" alt="More screen with appearance, accounts, receipts and security settings" width="240">](docs/screenshots/more.png) |
+| [<img src="docs/screenshots/shop-app-only.png" alt="Shop screen with expandable shopping lists and saved items" width="240">](docs/screenshots/shop-app-only.png) | [<img src="docs/screenshots/shopping-lists-app-only.png" alt="Saved demo shopping lists with estimated costs and pickup progress" width="240">](docs/screenshots/shopping-lists-app-only.png) | [<img src="docs/screenshots/more-app-only.png" alt="More screen with appearance, accounts, receipts and security settings" width="240">](docs/screenshots/more-app-only.png) |
 
 ## Install and start
 
