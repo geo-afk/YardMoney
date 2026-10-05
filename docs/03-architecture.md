@@ -1,6 +1,6 @@
 # Phase 4 — Technical and database architecture
 
-Proposal only. No production code, schema migration or remote service exists yet. Financial engines use exact integers/BigDecimal; the HTML prototype is only a design simulator.
+Historical architecture proposal. The current native implementation and schema are described in the [source map](../README.md#architecture-and-source-map); remote services remain planned. Financial engines use exact integers/BigDecimal.
 
 ## Architecture
 

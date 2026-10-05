@@ -1,6 +1,6 @@
 # Native validation checklist — pilot 0.3.6
 
-Status on 2 October 2026: the fixed instrumentation suite passed all 38 tests on the connected Pixel 8 Pro. See [current update and verification](17-vibrant-charts.md) and [testing setup](14-testing-environment.md). The manual checks below are **instructions to perform**, not passed results.
+Use the [current verification summary](../README.md#testing-and-verification) and [testing setup](14-testing-environment.md). The manual checks below are instructions, not a claim that every configuration passed.
 
 Use a fresh test profile with fictional data. Instrumented tests use isolated databases; the manual steps alter your app's test records. Keep an encrypted backup if your installation already holds real data.
 

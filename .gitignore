@@ -7,7 +7,6 @@ local.properties
 .env
 .env.*
 !.env.example
-design/validation-output/
 .gradle-home/
 .tooling/
 .bootstrap/
@@ -18,3 +17,7 @@ design/validation-output/
 *.hprof
 .DS_Store
 /core/bin/
+
+# Generated release archives and IDE migration scaffolding.
+/dist/
+/.github/modernize/

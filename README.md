@@ -2,7 +2,7 @@
 
 **Understand your money before payday.** YardMoney is an Android budgeting app for managing Jamaican dollars, everyday spending, bills, savings and receipts in one place.
 
-The current **0.4.0 local pilot** stores financial records on your device and works without an account. It uses a green Material interface with adjustable themes, spacing, corners and motion. Optional online accounts and cloud backup are planned for the first public release; they are not implemented in this pilot.
+The current **0.4.2 local pilot** stores financial records on your device and works without an account. It uses a green Material interface with adjustable themes, spacing, corners and motion. Optional online accounts and cloud backup are planned for the first public release; they are not implemented in this pilot.
 
 [User guide](#using-yardmoney) · [Developer setup](#developer-setup) · [Testing](#testing-and-verification) · [Architecture](#architecture-and-source-map) · [Issues](https://github.com/geo-afk/YardMoney/issues) · [MIT license](LICENSE)
 
@@ -29,20 +29,18 @@ The current **0.4.0 local pilot** stores financial records on your device and wo
 
 | Item | Current state |
 | --- | --- |
-| Version | 0.4.0, Android version code 11 |
+| Version | 0.4.2, Android version code 13 |
 | Availability | Development pilot; no production store release configured |
 | Currency | Jamaican dollars (JMD), displayed as J$ where applicable |
 | Android support | Android 8.0 / API 26 minimum; compile and target API 36 |
 | Accounts and connectivity | Local use without sign-in; optional identity and cloud backup remain planned |
-| Latest host verification | 77 tests passed |
-| Latest device verification | 43 instrumentation tests passed on a Pixel 8 Pro |
+| Latest host verification | 104 unit tests passed |
+| Latest device verification | 89 instrumentation tests passed on a Pixel 8 Pro |
 | Build checks | Debug, instrumentation APK and optimized unsigned release builds passed |
-| Android lint | Zero errors and 33 warnings in the latest full verification |
+| Android lint | Zero errors and 41 warnings in the latest full verification |
 | License | MIT; copyright 2026 Geovanni Stewart |
 
-Verification was recorded on **3 October 2026**. These results describe the tested source, not every Android device or every real receipt. Camera usability, real-receipt accuracy, fresh-device recovery, background reminders and a broader accessibility/device matrix still need manual validation. See [the device checklist](docs/07-device-validation.md).
-
-Some earlier documents and files under `dist/` record historical pilot builds. Their counts and checksums belong to those original artifacts. The current source includes receipt-detector, test-library and Activity scrolling/chart updates; build it for the latest pilot.
+Verification was recorded on **4 October 2026**. These results describe the tested source, not every Android device or every real receipt. Camera usability, real-receipt accuracy, fresh-device recovery, background reminders and a broader accessibility/device matrix still need manual validation. See [the device checklist](docs/07-device-validation.md).
 
 ## Who it is for
 
@@ -77,15 +75,13 @@ The app uses Material calendar date selection, dollar prefixes and grouped curre
 
 The money-entry form scrolls independently of its sheet. Returning to the top keeps it open; a new deliberate downward pull at the top closes it. The fixed Save action remains reachable with the keyboard open.
 
-Main navigation changes immediately without a tap ripple or page transition. Other supported chart, category and settings motion follows the selected preference: Calm, Slide, Expressive or Off. Corner preferences are Square, Soft and Rounded; spacing preferences are Compact and Comfortable. Wider windows use a navigation rail.
-
-The [browser design prototype](design/index.html) contains fictional examples. Its [light](design/screenshots/dashboard-light.jpg) and [dark](design/screenshots/dashboard-dark.jpg) images are **prototype previews**, not screenshots or test evidence from the installed Android app.
+Main navigation follows the selected motion preference: Calm, Slide, Expressive or Off. Corner preferences are Square, Soft and Rounded; spacing preferences are Compact and Comfortable. Wider windows use a navigation rail.
 
 ## Install and start
 
 You need a device running Android 8.0 or newer. This repository contains source code; generated APKs, local SDKs and signing keys are excluded from Git.
 
-For a development installation, follow [build and install from source](#build-and-install-from-source), or obtain a verified development APK from the maintainer. There is currently no documented public APK release or Play Store distribution. Do not assume a file linked in historical delivery notes is present in a fresh clone.
+For a development installation, follow [build and install from source](#build-and-install-from-source), or obtain a verified development APK from the maintainer. There is currently no documented public APK release or Play Store distribution.
 
 The debug build uses a development signing certificate. The optimized release build is unsigned until release signing is configured; it cannot be installed as a finished production release.
 
@@ -298,11 +294,11 @@ For a faster device-only rerun after configuring the environment:
 
 ### Explore with fictional data
 
-Run `./scripts/install-demo.ps1` to build and install **YardMoney Demo**, a separate copy with six months of fictional records. Your normal YardMoney database stays separate. The fixture includes 434 transactions, receipts, goals, bills and shopping lists. See [demo installation](docs/18-demo-data.md) for setup, repeat runs and reset instructions.
+Run `./scripts/install-demo.ps1` to build and install **YardMoney Demo**, a separate copy with six months of fictional records. Your normal YardMoney database stays separate. The fixture includes fictional transactions, receipts, goals, bills and shopping lists. See [demo installation](docs/18-demo-data.md) for setup, repeat runs and reset instructions.
 
 ### Evidence and reports
 
-The latest full run passed 77 host tests and 43 device tests on a Pixel 8 Pro, with no skipped device tests. Receipt regression coverage checks ambiguous uniform images as well as a recognizable paper quadrilateral. UI tests cover forms, calendar behavior, category selection and appearance; repository tests use isolated databases for ledger invariants.
+The latest full run passed 104 host tests and 89 device tests on a Pixel 8 Pro, with no skipped device tests. Receipt regression coverage checks ambiguous uniform images as well as a recognizable paper quadrilateral. UI tests cover forms, calendar behavior, category selection and appearance; repository tests use isolated databases for ledger invariants.
 
 | Report | Generated location |
 | --- | --- |
@@ -311,7 +307,7 @@ The latest full run passed 77 host tests and 43 device tests on a Pixel 8 Pro, w
 | Device tests | `app/build/reports/androidTests/connected/debug/index.html` |
 | Android lint | `app/build/reports/lint-results-debug.html` |
 
-Reports are generated locally and excluded from Git. Results are described in [testing setup and fixes](docs/14-testing-environment.md). Automated checks do not replace the [manual validation checklist](docs/07-device-validation.md), including real receipts, camera use, authentication, restore, notification delivery, large fonts and different system navigation modes.
+Reports are generated locally and excluded from Git. Setup is described in [testing setup](docs/14-testing-environment.md). Automated checks do not replace the [manual validation checklist](docs/07-device-validation.md), including real receipts, authentication, notification delivery and additional device configurations.
 
 ## Architecture and source map
 
@@ -328,25 +324,17 @@ YardMoney/
 │       ├── security/          Private storage and portable backup
 │       └── reminders/         Bill reminder scheduling
 ├── core/                      Money, budget, scheduling, parsing and crypto rules
-├── docs/                      Research, architecture, update evidence and checklists
-├── design/                    Separate browser review prototype
-├── scripts/                   Windows SDK bootstrap and verification helpers
+├── docs/                      Product, architecture, setup and validation guidance
+├── scripts/                   Windows SDK bootstrap, demo installation and verification
+├── tools/                     Dependency and isolated device verification
 ├── gradle/wrapper/            Reproducible Gradle launcher
 ├── app/gradle.lockfile         Android dependency locks
 └── core/gradle.lockfile        Core dependency locks
 ```
 
-Application ID: `jm.yardmoney`. Current Room schema version: 2. The root project and repository are named `YardMoney`; changing a folder name does not change the Android application ID.
+Application ID: `jm.yardmoney`. Current Room schema version: 3. The root project and repository are named `YardMoney`; changing a folder name does not change the Android application ID.
 
 Navigation uses saveable Compose root destinations and dialogs. The implementation does not currently use Navigation Compose or Navigation 3. The five root destinations are Home, Activity, Plan, Shop and More.
-
-The `design/` prototype is independent of the native ledger. To view it, install Node.js and run:
-
-```powershell
-node design/serve.cjs
-```
-
-Open `http://localhost:4173`. The prototype uses fictional examples and does not persist financial records.
 
 ## Financial and receipt rules
 
@@ -380,7 +368,6 @@ Changes to these rules need meaningful financial/recovery tests. Schema changes 
 | Reminders do not appear | Check notification permission, OS notification settings and background restrictions; manual validation remains required |
 | Screenshot is blank or blocked | Secure-window protection intentionally restricts ordinary app capture |
 | Backup cannot be restored | Check the password and file integrity; do not overwrite real records while diagnosing |
-| Repository links to an absent historical APK | Build current source; generated APKs are excluded from Git |
 
 For the renamed local workspace, reopen `YardMoney` in your IDE and verify the SDK path. The optional rename helper is for older folders named `Android App`; a fresh clone already has the correct name.
 
@@ -423,20 +410,8 @@ There are no committed release dates in this repository. Bank integrations, adva
 | [Architecture proposal](docs/03-architecture.md) | Original proposal; confirm final choices against source |
 | [Design system](docs/04-design.md) | Visual direction and flows |
 | [Assurance](docs/05-assurance.md) | Release checks and acceptance gates |
-| [Historical implementation](docs/06-implementation.md) | Earlier pilot evidence |
 | [Device checklist](docs/07-device-validation.md) | Manual checks still to perform |
-| [Controls and settings](docs/09-controls-and-settings.md) | Currency, calendar and settings updates |
-| [Charts and motion](docs/10-charts-motion-calendar.md) | Category activity and motion choices |
-| [Forms and controls](docs/11-forms-controls-allocation.md) | Scrollable entry sheet and dropdown behavior |
-| [Merged Plan](docs/12-merged-plan-navigation.md) | Budget presentation and selection cues |
-| [Donut and navigation](docs/13-donut-immediate-navigation.md) | Current chart and immediate-menu updates |
-| [Live budget and bills](docs/16-live-budget-reservations.md) | Current used-versus-allocated charts, recurring groups and retry protection |
-| [Chart colors](docs/17-vibrant-charts.md) | Shared vibrant palette and theme contrast |
-| [Activity and scrolling](docs/15-activity-entry-scroll.md) | Chart filters and form gesture behavior |
 | [Testing setup and fixes](docs/14-testing-environment.md) | Latest device-test evidence and Windows setup |
-| [Prototype review](design/REVIEW.md) | Browser design review, distinct from Android verification |
-
-This README follows [GitHub's README guidance](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes) for purpose, getting started, support and relative links, and [Write the Docs guidance](https://www.writethedocs.org/guide/writing/beginners-guide-to-docs/) for audience-aware explanations and runnable examples. User tasks appear before implementation details; deeper historical evidence stays in linked documents.
 
 For Android tooling, see [Android Studio](https://developer.android.com/studio), [physical-device setup](https://developer.android.com/studio/run/device), [virtual-device setup](https://developer.android.com/studio/run/managing-avds) and [AndroidX Test release notes](https://developer.android.com/jetpack/androidx/releases/test).
 

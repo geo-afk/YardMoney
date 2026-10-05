@@ -1,6 +1,6 @@
 # Phase 2–3 — Product requirements and information architecture
 
-Status: design and implementation approved, 2026-10-02. User preference: **optional account and backup for first public release**. Core budgeting works without registration. Visible, editable bill reservations are included in the approved implementation. This document retains the release requirements; pilot scope and outstanding public-release gates are recorded in [implementation status](06-implementation.md).
+Status: design and implementation approved, 2026-10-02. User preference: **optional account and backup for first public release**. Core budgeting works without registration. Visible, editable bill reservations are included in the approved implementation. This document retains the release requirements; pilot scope and outstanding public-release gates are recorded in [implementation status](../README.md#project-status).
 
 ## Product outcome and assumptions
 

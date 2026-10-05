@@ -1,4 +1,4 @@
-> Design baseline approved for 0.1.0. The implemented 0.2.0 theme customization, contrast, scanner and chart changes are documented in [the update notes](08-update-0.2.0.md).
+> Design baseline approved for 0.1.0. Current app features are documented in the [README](../README.md#features).
 
 # Phase 5–6 — User flows and UI/UX direction
 

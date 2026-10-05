@@ -76,4 +76,4 @@ These retention periods are product proposals, not statutory periods. User-creat
 
 Phase 11: tune parser quality, startup/memory and chart clarity only after measurements. Phase 12: Play target SDK/Data safety/privacy notice, store disclosures, accessibility/device matrix, signing/release-key custody, crash recovery, support/deletion contact and professional verification gates. Publishing costs are distinct from infrastructure costs and require later consideration.
 
-The native local pilot now builds: 52 host unit tests pass, Android lint has zero errors, and debug, unsigned release and instrumentation APKs compile. Native tests and hardware checks have not run because no device or emulator is attached. See [current update evidence](08-update-0.2.0.md) and [device validation](07-device-validation.md). Review-prototype checks are separately recorded in design/REVIEW.md.
+Current build and device evidence is summarized in the [README](../README.md#testing-and-verification). The release checklist remains in [device validation](07-device-validation.md).
