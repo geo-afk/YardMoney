@@ -11,6 +11,7 @@ The current **0.4.2 local pilot** stores financial records on your device and wo
 - [Project status](#project-status)
 - [Who it is for](#who-it-is-for)
 - [Features](#features)
+- [Screenshots](#screenshots)
 - [Install and start](#install-and-start)
 - [Using YardMoney](#using-yardmoney)
 - [Privacy, security and backup](#privacy-security-and-backup)
@@ -77,11 +78,23 @@ The money-entry form scrolls independently of its sheet. Returning to the top ke
 
 Main navigation follows the selected motion preference: Calm, Slide, Expressive or Off. Corner preferences are Square, Soft and Rounded; spacing preferences are Compact and Comfortable. Wider windows use a navigation rail.
 
+## Screenshots
+
+Captured from YardMoney 0.4.2 Demo on a Pixel 8 Pro using fictional records and a customized dark theme. Tap a picture to view it at full size.
+
+| Home | Activity | Plan |
+| :---: | :---: | :---: |
+| [<img src="docs/screenshots/home.png" alt="Home dashboard showing safe-to-spend money and payday guidance" width="240">](docs/screenshots/home.png) | [<img src="docs/screenshots/activity.png" alt="Activity screen with record filters, search and totals" width="240">](docs/screenshots/activity.png) | [<img src="docs/screenshots/plan.png" alt="Plan screen with needs, wants and savings budget chart" width="240">](docs/screenshots/plan.png) |
+
+| Shop | Shopping lists | More |
+| :---: | :---: | :---: |
+| [<img src="docs/screenshots/shop.png" alt="Shop screen with expandable shopping lists and saved items" width="240">](docs/screenshots/shop.png) | [<img src="docs/screenshots/shopping-lists.png" alt="Saved demo shopping lists with estimated costs and pickup progress" width="240">](docs/screenshots/shopping-lists.png) | [<img src="docs/screenshots/more.png" alt="More screen with appearance, accounts, receipts and security settings" width="240">](docs/screenshots/more.png) |
+
 ## Install and start
 
 You need a device running Android 8.0 or newer. This repository contains source code; generated APKs, local SDKs and signing keys are excluded from Git.
 
-For a development installation, follow [build and install from source](#build-and-install-from-source), or obtain a verified development APK from the maintainer. There is currently no documented public APK release or Play Store distribution.
+For a development installation, follow [build and install from source](#build-and-install-from-source), or obtain a verified development APK from the maintainer. The [0.4.2 development prerelease](https://github.com/geo-afk/YardMoney/releases/tag/v0.4.2) includes an installable APK and checksum. Play Store distribution is not configured.
 
 The debug build uses a development signing certificate. The optimized release build is unsigned until release signing is configured; it cannot be installed as a finished production release.
 
