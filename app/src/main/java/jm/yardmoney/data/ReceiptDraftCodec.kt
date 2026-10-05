@@ -48,11 +48,11 @@ internal object ReceiptDraftCodec {
         val fallback = ReceiptParser.parse(raw)
         val json =
             runCatching {
-                    JSONObject(
-                        raw.substringAfter("[Review edits]")
-                            .substringBefore("[Verified receipt details]")
-                    )
-                }
+                JSONObject(
+                    raw.substringAfter("[Review edits]")
+                        .substringBefore("[Verified receipt details]")
+                )
+            }
                 .getOrNull()
                 ?.takeIf { it.optInt("version") == 1 } ?: return fallback
         fun text(key: String, default: String) = json.optString(key, default)

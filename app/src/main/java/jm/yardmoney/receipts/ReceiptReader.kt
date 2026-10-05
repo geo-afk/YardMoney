@@ -12,7 +12,11 @@ class ReceiptReader(private val app: YardMoneyApplication) {
     suspend fun read(uri: Uri, progress: (String) -> Unit = {}): String {
         progress("Reading photo…")
         val bytes = ReceiptImages.read(app, uri)
-        return readBytes(bytes, progress)
+        return try {
+            readBytes(bytes, progress)
+        } finally {
+            bytes.fill(0)
+        }
     }
 
     suspend fun readBytes(bytes: ByteArray, progress: (String) -> Unit = {}): String {

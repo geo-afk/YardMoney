@@ -17,3 +17,4 @@ design/validation-output/
 *.iml
 *.hprof
 .DS_Store
+/core/bin/

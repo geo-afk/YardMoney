@@ -12,6 +12,7 @@ object Money {
 
     fun parse(text: String, allowNegative: Boolean = false): Long {
         val trimmed = text.trim()
+        require(trimmed.length <= 256) { "This amount is too large." }
         val entered = if (trimmed.count { it == '.' } == 1) trimmed.removeSuffix(".") else trimmed
         if (entered.contains(','))
             require(
@@ -30,9 +31,10 @@ object Money {
         ) {
             "Enter an amount with up to two decimal places."
         }
-        val amount = BigDecimal(clean).movePointRight(2).longValueExact()
-        require(amount in -MAX_MINOR..MAX_MINOR) { "This amount is too large." }
-        return amount
+        // Check the decimal bound before converting, so pasted huge values get a useful error.
+        val amount = BigDecimal(clean).movePointRight(2)
+        require(amount.abs() <= BigDecimal.valueOf(MAX_MINOR)) { "This amount is too large." }
+        return amount.longValueExact()
     }
 
     fun positive(text: String): Long =

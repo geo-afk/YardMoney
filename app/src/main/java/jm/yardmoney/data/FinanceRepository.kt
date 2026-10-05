@@ -626,8 +626,6 @@ class FinanceRepository(private val db: YardDatabase) {
         dao.put(ShoppingItem(id(), listId, name.trim().take(120), quantity, key, manual, optional))
     }
 
-    suspend fun toggleItem(item: ShoppingItem) = dao.put(item.copy(checked = !item.checked))
-
     suspend fun saveShoppingList(
         list: ShoppingList,
         items: List<ShoppingItem>,

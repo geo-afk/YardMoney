@@ -31,6 +31,9 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            // Exercise the real shrinker through the fictional demo without retaining internal
+            // test APIs or shared test-runner dependencies in the production app.
+            if (demoInstall) signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -41,6 +44,9 @@ kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarg
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 dependencies {
     implementation(project(":core"))
+    // Room migration serializers and the parent app classloader must use the same runtime.
+    implementation(platform("org.jetbrains.kotlinx:kotlinx-serialization-bom:1.8.1"))
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json")
     implementation(platform("androidx.compose:compose-bom:2025.10.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -62,6 +68,10 @@ dependencies {
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
     implementation("androidx.biometric:biometric:1.1.0")
+    constraints {
+        // Align a transitive widget's resources with ATF's test-only Material styles.
+        implementation("androidx.drawerlayout:drawerlayout:1.2.0")
+    }
     implementation("androidx.work:work-runtime-ktx:2.10.5")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
@@ -70,5 +80,10 @@ dependencies {
     androidTestImplementation("androidx.room:room-testing:2.8.4")
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.10.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    // Official Compose accessibility checks share the app's locked Compose version (API 26+).
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4-accessibility")
+    // ATF's old Material prerelease references a removed AppCompat DrawableWrapper under R8.
+    // https://github.com/material-components/material-components-android/releases/tag/1.12.0
+    androidTestImplementation("com.google.android.material:material:1.12.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

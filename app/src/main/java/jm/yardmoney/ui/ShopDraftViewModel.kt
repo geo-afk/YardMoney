@@ -13,7 +13,9 @@ internal class ShopDraftViewModel(private val saved: SavedStateHandle) : ViewMod
 
     fun formField(key: String, field: String, value: String) {
         val json =
-            (saved.get<String>(key)?.takeIf { it.isNotBlank() }?.let(::JSONObject) ?: JSONObject())
+            // Interrupted or incompatible saved state must not make editing crash on every launch.
+            runCatching { saved.get<String>(key)?.takeIf { it.isNotBlank() }?.let(::JSONObject) }
+                .getOrNull() ?: JSONObject()
         saved[key] = json.put(field, value).toString()
     }
 
@@ -25,8 +27,10 @@ internal class ShopDraftViewModel(private val saved: SavedStateHandle) : ViewMod
         val previous = ShopDraft.decode(state.value)
         if (previous?.list?.id != draft?.list?.id) {
             previous?.items?.forEach { clearForm("shopForm:${it.id}") }
-            val picker =
+            val picker = runCatching {
                 saved.get<String>("shopCatalog")?.takeIf { it.isNotBlank() }?.let(::JSONObject)
+            }
+                .getOrNull()
             picker?.optString("query")?.let { clearForm("shopForm:${normalizedShopName(it)}") }
             clearForm("shopCatalog")
         }

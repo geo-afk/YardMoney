@@ -42,11 +42,17 @@ internal fun BackupPanel(model: AppModel, restoreOnly: Boolean = false) {
                 password = ""
                 model.act {
                     val bytes = PortableBackup(model.app).export(pass)
-                    model.app.contentResolver.openOutputStream(uri, "w")?.use { it.write(bytes) }
-                        ?: error("Could not write backup.")
-                    bytes.fill(0)
+                    // Failed/cancelled document writes must wipe the in-memory backup too.
+                    try {
+                        model.app.contentResolver.openOutputStream(uri, "w")?.use {
+                            it.write(bytes)
+                        } ?: error("Could not write backup.")
+                    } finally {
+                        bytes.fill(0)
+                        pass.fill('\u0000')
+                    }
                 }
-            }
+            } else password = ""
         }
     val load =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -54,22 +60,30 @@ internal fun BackupPanel(model: AppModel, restoreOnly: Boolean = false) {
                 val pass = password.toCharArray()
                 password = ""
                 model.act {
-                    val bytes =
-                        model.app.contentResolver.openInputStream(uri)?.use { input ->
-                            val output = java.io.ByteArrayOutputStream()
-                            val buffer = ByteArray(8192)
-                            var count = 0
-                            while (true) {
-                                val n = input.read(buffer)
-                                if (n < 0) break
-                                count += n
-                                require(count <= 50_000_064) { "Backup exceeds 50 MB." }
-                                output.write(buffer, 0, n)
-                            }
-                            output.toByteArray()
-                        } ?: error("Could not read backup.")
-                    PortableBackup(model.app).restore(bytes, pass)
-                    bytes.fill(0)
+                    // A provider may fail before decoding; clear the password on that path as well.
+                    try {
+                        val bytes =
+                            model.app.contentResolver.openInputStream(uri)?.use { input ->
+                                val output = java.io.ByteArrayOutputStream()
+                                val buffer = ByteArray(8192)
+                                var count = 0
+                                while (true) {
+                                    val n = input.read(buffer)
+                                    if (n < 0) break
+                                    count += n
+                                    require(count <= 50_000_064) { "Backup exceeds 50 MB." }
+                                    output.write(buffer, 0, n)
+                                }
+                                output.toByteArray()
+                            } ?: error("Could not read backup.")
+                        try {
+                            PortableBackup(model.app).restore(bytes, pass)
+                        } finally {
+                            bytes.fill(0)
+                        }
+                    } finally {
+                        pass.fill('\u0000')
+                    }
                 }
             } else password = ""
         }

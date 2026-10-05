@@ -53,6 +53,7 @@ internal fun shopCatalog(data: FinanceSnapshot): List<CatalogItem> {
                 )
             }
 
+    val listDates = data.shopping.lists.associate { it.id to it.createdDate.orEmpty() }
     val manual =
         data.shopping.items.map { item ->
             CatalogItem(
@@ -60,7 +61,7 @@ internal fun shopCatalog(data: FinanceSnapshot): List<CatalogItem> {
                 item.productKey,
                 item.manualPriceMinor,
                 item.category,
-                data.shopping.lists.find { it.id == item.listId }?.createdDate.orEmpty(),
+                listDates[item.listId].orEmpty(),
             )
         }
     return (scanned + manual)

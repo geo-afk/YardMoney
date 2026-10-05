@@ -37,7 +37,7 @@ internal fun TransactionForm(
         mutableStateOf(
             (commitment?.accountId ?: initialAccountId)?.takeIf { id ->
                 data.ledger.accounts.any { it.account.id == id }
-            } ?: data.ledger.accounts.first().account.id
+            } ?: data.ledger.accounts.firstOrNull()?.account?.id.orEmpty()
         )
     }
     var destination by rememberSaveable {

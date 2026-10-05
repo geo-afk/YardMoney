@@ -200,23 +200,8 @@ internal fun ShoppingPage(
                         }
                     },
                 )
-            route == "items" || route == "receipts" ->
-                LazyColumn(
-                    Modifier.widthIn(max = 840.dp).fillMaxSize(),
-                    contentPadding = PaddingValues(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    item {
-                        ShopHeading(
-                            if (route == "items") "Saved Items" else "Scanned receipts",
-                            ::back,
-                        )
-                    }
-                    if (route == "items") {
-                        item { SavedItemsSection(data, busy) }
-                        item { ShopPriceNotebook(data.receipt.prices) }
-                    } else item { ScannedReceiptsSection(model, data, busy) }
-                }
+            route == "items" -> SavedItemsSection(data, busy, ::back)
+            route == "receipts" -> ScannedReceiptsSection(model, data, busy, ::back)
             route == "lists" ->
                 LazyColumn(
                     Modifier.widthIn(max = 840.dp).fillMaxSize(),
@@ -370,7 +355,7 @@ internal fun ShoppingPage(
 }
 
 @Composable
-private fun ShopHeading(title: String, back: () -> Unit) {
+internal fun ShopHeading(title: String, back: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1321,39 +1306,6 @@ private fun ShopAffordability(
                     "Above safe to spend by ${Money.format(receipt.remaining-safeMinor)} in this account scope."
             }
         )
-    }
-}
-
-@Composable
-private fun ShopPriceNotebook(prices: List<PriceObservation>) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    MoneyCard {
-        TextButton(
-            onClick = { expanded = !expanded },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        ) {
-            Icon(Icons.Default.PriceCheck, null)
-            Spacer(Modifier.width(12.dp))
-            Text("Your price notebook", Modifier.weight(1f))
-            Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null)
-        }
-        if (expanded) {
-            if (prices.isEmpty()) Text("Confirm a receipt to compare dated package prices here.")
-            prices
-                .groupBy { it.productKey }
-                .forEach { (_, rows) ->
-                    Text(rows.maxBy { it.date }.name, style = MaterialTheme.typography.titleMedium)
-                    rows
-                        .sortedBy { it.unitPriceMinor }
-                        .forEach { price ->
-                            Record(
-                                "${price.merchant} • ${price.branch.ifBlank { "Branch unknown" }}",
-                                "${price.date} • ${price.packageSize} ${price.unit} • ${Money.format(price.packPriceMinor)} / package",
-                                "${Money.format(price.unitPriceMinor)} / ${price.unit}",
-                            )
-                        }
-                }
-        }
     }
 }
 

@@ -19,6 +19,7 @@ import javax.crypto.spec.GCMParameterSpec
 class PrivateStorage(private val context: Context) {
     private val alias = "yardmoney-local-v1"
 
+    @Synchronized
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey(alias, null) as? SecretKey)?.let {
@@ -79,7 +80,9 @@ class PrivateStorage(private val context: Context) {
 
     fun saveReceipt(id: String, bytes: ByteArray): String {
         require(Regex("[a-zA-Z0-9-]+").matches(id))
-        require(bytes.size <= 15_000_000)
+        require(bytes.isNotEmpty() && bytes.size <= 15_000_000) {
+            "Receipt image is empty or too large."
+        }
         val dir = File(context.noBackupFilesDir, "receipts").apply { mkdirs() }
         val file = AtomicFile(File(dir, "$id.bin"))
         val out = file.startWrite()
@@ -95,12 +98,28 @@ class PrivateStorage(private val context: Context) {
 
     fun readReceipt(ref: String): ByteArray {
         require(Regex("[a-zA-Z0-9-]+\\.bin").matches(ref))
-        return decrypt(File(context.noBackupFilesDir, "receipts/$ref").readBytes())
+        val file = File(context.noBackupFilesDir, "receipts/$ref")
+        require(file.length() <= 15_000_030) { "Stored receipt image is too large." }
+        return decrypt(file.readBytes())
     }
 
     fun deleteReceipt(ref: String) {
         require(Regex("[a-zA-Z0-9-]+\\.bin").matches(ref))
         File(context.noBackupFilesDir, "receipts/$ref").delete()
+    }
+
+    fun removeExpiredTempReceipts(nowMillis: Long = System.currentTimeMillis()) {
+        // Interrupted scans may leave plaintext cache photos; keep active drafts and unrelated
+        // exports.
+        val cutoff = nowMillis - 24L * 60 * 60 * 1000
+        File(context.cacheDir, "exports")
+            .listFiles()
+            ?.filter {
+                it.isFile &&
+                    Regex("receipt-[a-zA-Z0-9-]+\\.jpg").matches(it.name) &&
+                    it.lastModified() < cutoff
+            }
+            ?.forEach { it.delete() }
     }
 
     fun deleteAllReceiptFiles() {

@@ -11,6 +11,80 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ReceiptImageTest {
     @Test
+    fun storageFailureBeforeCameraStartsReportsRecoveryWithoutLeavingAPhoto() {
+        val context =
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        val root =
+            java.io.File(context.cacheDir, "capture-failure-${System.nanoTime()}").apply {
+                mkdirs()
+            }
+        val blocked = java.io.File(root, "exports").apply { writeText("Occupied path") }
+        var message: String? = null
+        try {
+            assertNull(jm.yardmoney.ui.prepareReceiptCapture(blocked) { message = it })
+            assertTrue(requireNotNull(message).contains("Free some space"))
+            assertEquals("Occupied path", blocked.readText())
+            assertEquals(1, root.listFiles()!!.size)
+            blocked.delete()
+            val recovered =
+                requireNotNull(jm.yardmoney.ui.prepareReceiptCapture(blocked) { fail(it) })
+            assertTrue(recovered.isFile)
+            recovered.delete()
+            blocked.delete()
+        } finally {
+            blocked.delete()
+            root.delete()
+        }
+    }
+
+    @Test
+    fun realOfflineRecognitionProducesPrivateDraftWithoutFinancialPosting() = runBlocking {
+        val app =
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+                .targetContext
+                .applicationContext as jm.yardmoney.YardMoneyApplication
+        val image = Bitmap.createBitmap(1000, 1600, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(image)
+        canvas.drawColor(Color.WHITE)
+        val paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.BLACK
+                textSize = 48f
+                typeface = Typeface.MONOSPACE
+            }
+        listOf(
+                "DEMO MARKET",
+                "2026-10-04",
+                "1 RICE 10.00",
+                "2 MILK 20.00",
+                "TOTAL 30.00",
+                "CASH 30.00",
+            )
+            .forEachIndexed { index, line ->
+                canvas.drawText(line, 70f, 140f + index * 110f, paint)
+            }
+        val output = java.io.ByteArrayOutputStream()
+        image.compress(Bitmap.CompressFormat.PNG, 100, output)
+        image.recycle()
+        val before = app.repository.dao.readTransactions().size
+        var id: String? = null
+        try {
+            id =
+                kotlinx.coroutines.withTimeout(30000) {
+                    ReceiptReader(app).readBytes(output.toByteArray())
+                }
+            val draft = requireNotNull(app.repository.dao.draft(id))
+            assertNull(draft.imageRef)
+            val parsed = jm.yardmoney.data.ReceiptDraftCodec.parse(draft.rawText)
+            assertEquals(3000L, parsed.totalMinor)
+            assertTrue(parsed.lines.any { it.name.contains("RICE") })
+            assertEquals(before, app.repository.dao.readTransactions().size)
+        } finally {
+            id?.let { app.repository.dao.deleteDraft(it) }
+        }
+    }
+
+    @Test
     fun uniformDarkImageWarnsAboutLightingAndFocus() {
         val image = Bitmap.createBitmap(800, 1600, Bitmap.Config.ARGB_8888)
         image.eraseColor(Color.rgb(30, 30, 30))

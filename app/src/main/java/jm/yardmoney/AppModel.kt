@@ -34,7 +34,10 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
-        act(successMessage = null) { repo.materializeBills() }
+        act(successMessage = null) {
+            app.storage.removeExpiredTempReceipts()
+            repo.materializeBills()
+        }
     }
 
     fun retryOpenData() {

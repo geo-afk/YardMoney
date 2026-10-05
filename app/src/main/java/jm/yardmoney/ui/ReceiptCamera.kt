@@ -37,6 +37,17 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.File
 import java.util.concurrent.Executors
 
+internal fun prepareReceiptCapture(directory: File, failed: (String) -> Unit): File? =
+    try {
+        directory.mkdirs()
+        File.createTempFile("receipt-", ".jpg", directory)
+    } catch (_: java.io.IOException) {
+        // Storage failure occurs before CameraX's callback; keep the screen usable for
+        // retry/import.
+        failed("Could not store the photo. Free some space or import a smaller image.")
+        null
+    }
+
 @Composable
 internal fun ReceiptCamera(onDismiss: () -> Unit, onPhoto: (Uri) -> Unit) {
     val context = LocalContext.current
@@ -202,31 +213,43 @@ internal fun ReceiptCamera(onDismiss: () -> Unit, onPhoto: (Uri) -> Unit) {
                 Button(
                     enabled = ready && !taking,
                     onClick = {
-                        taking = true
-                        val dir = File(context.cacheDir, "exports").apply { mkdirs() }
-                        val file = File.createTempFile("receipt-", ".jpg", dir)
-                        capture.takePicture(
-                            ImageCapture.OutputFileOptions.Builder(file).build(),
-                            ContextCompat.getMainExecutor(context),
-                            object : ImageCapture.OnImageSavedCallback {
-                                override fun onImageSaved(result: ImageCapture.OutputFileResults) {
-                                    taking = false
-                                    onPhoto(
-                                        FileProvider.getUriForFile(
-                                            context,
-                                            "${context.packageName}.files",
-                                            file,
-                                        )
-                                    )
-                                }
+                        val file =
+                            prepareReceiptCapture(File(context.cacheDir, "exports")) { error = it }
+                        if (file != null) {
+                            taking = true
+                            try {
+                                capture.takePicture(
+                                    ImageCapture.OutputFileOptions.Builder(file).build(),
+                                    ContextCompat.getMainExecutor(context),
+                                    object : ImageCapture.OnImageSavedCallback {
+                                        override fun onImageSaved(
+                                            result: ImageCapture.OutputFileResults
+                                        ) {
+                                            taking = false
+                                            onPhoto(
+                                                FileProvider.getUriForFile(
+                                                    context,
+                                                    "${context.packageName}.files",
+                                                    file,
+                                                )
+                                            )
+                                        }
 
-                                override fun onError(exception: ImageCaptureException) {
-                                    taking = false
-                                    error = "Capture failed. Try again."
-                                    file.delete()
-                                }
-                            },
-                        )
+                                        override fun onError(exception: ImageCaptureException) {
+                                            taking = false
+                                            error = "Capture failed. Try again."
+                                            file.delete()
+                                        }
+                                    },
+                                )
+                            } catch (_: Exception) {
+                                // Permission/lifecycle changes may reject capture synchronously
+                                // too.
+                                taking = false
+                                file.delete()
+                                error = "Capture failed. Try again or import a photo."
+                            }
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.small,

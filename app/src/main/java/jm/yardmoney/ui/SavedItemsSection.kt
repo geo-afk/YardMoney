@@ -4,6 +4,8 @@ import android.content.SharedPreferences
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -56,7 +58,7 @@ internal fun rememberSavedCatalog(originals: List<CatalogItem>): List<CatalogIte
 }
 
 @Composable
-internal fun SavedItemsSection(data: FinanceSnapshot, busy: Boolean) {
+internal fun SavedItemsSection(data: FinanceSnapshot, busy: Boolean, back: () -> Unit) {
     val prefs = LocalContext.current.getSharedPreferences("saved_items", 0)
     var revision by remember { mutableIntStateOf(0) }
     DisposableEffect(prefs) {
@@ -71,59 +73,98 @@ internal fun SavedItemsSection(data: FinanceSnapshot, busy: Boolean) {
     var deleting by rememberSaveable { mutableStateOf<List<String>?>(null) }
     val originals = remember(data) { shopCatalog(data) }
     val catalog = rememberSavedCatalog(originals)
-    MoneyCard {
-        Text("Find an item", style = MaterialTheme.typography.titleLarge)
-        OutlinedTextField(
-            query,
-            { query = it },
-            label = { Text("Search saved items") },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Choice("Sort", sort, listOf("Name", "Latest", "Price")) { sort = it }
-        Choice(
-            "Category",
-            category,
-            listOf("All") + catalog.map { it.category }.distinct().sorted(),
-        ) {
-            category = it
+    val matches =
+        searchShopCatalog(catalog, query).filter {
+            category == "All" || it.category == category
         }
-        val matches =
-            searchShopCatalog(catalog, query).filter {
-                category == "All" || it.category == category
-            }
-        val sorted =
-            when (sort) {
-                "Latest" -> matches.sortedByDescending { it.date }
-                "Price" ->
-                    matches.sortedWith(
-                        compareBy<CatalogItem> { it.price == null }.thenBy { it.price }
-                    )
-                else -> matches.sortedBy { it.searchKey }
-            }
-        if (busy && catalog.isEmpty()) repeat(3) { ShopLoadingSkeleton() }
-        else if (sorted.isEmpty())
-            Text(
-                if (catalog.isEmpty())
-                    "Save a shopping item or confirm a receipt to build your collection."
-                else "No matching saved items."
+    val sorted =
+        when (sort) {
+            "Latest" -> matches.sortedByDescending { it.date }
+            "Price" ->
+                matches.sortedWith(compareBy<CatalogItem> { it.price == null }.thenBy { it.price })
+            else -> matches.sortedBy { it.searchKey }
+        }
+    var notebookExpanded by rememberSaveable { mutableStateOf(false) }
+    val prices =
+        remember(data.receipt.prices) {
+            data.receipt.prices.sortedWith(
+                compareBy<PriceObservation> { it.productKey }.thenBy { it.unitPriceMinor }
             )
-        sorted.forEach { item ->
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable {
-                    editing = item.sourceKeys.first()
-                }
-            ) {
-                IdentityBadge(categoryIdentity(item.category))
-                Column(Modifier.weight(1f)) {
-                    Text(item.name, style = MaterialTheme.typography.titleMedium)
-                    Text(item.price?.let(Money::format) ?: "Not specified")
-                    if (item.purchases > 0) Text("${item.purchases} purchases")
-                }
-                TextButton(
-                    onClick = { deleting = item.sourceKeys },
-                    modifier = Modifier.heightIn(min = 48.dp),
+        }
+    // Each product gets a lazy row; a single giant card previously composed the entire catalog.
+    LazyColumn(
+        Modifier.widthIn(max = 840.dp).fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        item { ShopHeading("Saved Items", back) }
+        item {
+            MoneyCard {
+                Text("Find an item", style = MaterialTheme.typography.titleLarge)
+                OutlinedTextField(
+                    query,
+                    { query = it },
+                    label = { Text("Search saved items") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Choice("Sort", sort, listOf("Name", "Latest", "Price")) { sort = it }
+                Choice(
+                    "Category",
+                    category,
+                    listOf("All") + catalog.map { it.category }.distinct().sorted(),
                 ) {
-                    Text("Delete")
+                    category = it
+                }
+                if (busy && catalog.isEmpty()) repeat(3) { ShopLoadingSkeleton() }
+                else if (sorted.isEmpty())
+                    Text(
+                        if (catalog.isEmpty())
+                            "Save a shopping item or confirm a receipt to build your collection."
+                        else "No matching saved items."
+                    )
+            }
+        }
+        items(sorted, key = { it.sourceKeys.first() }) { item ->
+            MoneyCard {
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable {
+                        editing = item.sourceKeys.first()
+                    }
+                ) {
+                    IdentityBadge(categoryIdentity(item.category))
+                    Column(Modifier.weight(1f)) {
+                        Text(item.name, style = MaterialTheme.typography.titleMedium)
+                        Text(item.price?.let(Money::format) ?: "Not specified")
+                        if (item.purchases > 0) Text("${item.purchases} purchases")
+                    }
+                    TextButton(
+                        onClick = { deleting = item.sourceKeys },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) {
+                        Text("Delete")
+                    }
+                }
+            }
+        }
+        item {
+            OutlinedButton(
+                onClick = { notebookExpanded = !notebookExpanded },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (notebookExpanded) "Hide price notebook" else "Your price notebook")
+            }
+        }
+        if (notebookExpanded) {
+            if (prices.isEmpty())
+                item { Text("Confirm a receipt to compare dated package prices here.") }
+            items(prices, key = { "price:${it.id}" }) { price ->
+                MoneyCard {
+                    Text(price.name, style = MaterialTheme.typography.titleMedium)
+                    Record(
+                        "${price.merchant} • ${price.branch.ifBlank { "Branch unknown" }}",
+                        "${price.date} • ${price.packageSize} ${price.unit} • ${Money.format(price.packPriceMinor)} / package",
+                        "${Money.format(price.unitPriceMinor)} / ${price.unit}",
+                    )
                 }
             }
         }
@@ -211,16 +252,29 @@ internal fun SavedItemsSection(data: FinanceSnapshot, busy: Boolean) {
 }
 
 @Composable
-internal fun ScannedReceiptsSection(model: AppModel, data: FinanceSnapshot, busy: Boolean) {
+internal fun ScannedReceiptsSection(
+    model: AppModel,
+    data: FinanceSnapshot,
+    busy: Boolean,
+    back: () -> Unit,
+) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var draftId by rememberSaveable { mutableStateOf<String?>(null) }
-    MoneyCard {
-        Text("Scanned receipts", style = MaterialTheme.typography.titleLarge)
-        if (busy && data.receipt.receipts.isEmpty()) repeat(3) { ShopLoadingSkeleton() }
-        if (data.receipt.receipts.isEmpty() && data.receipt.drafts.isEmpty() && !busy)
-            Text("Your scanned receipts will appear here.")
-        data.receipt.receipts.forEach { receipt ->
-            val storedCount = data.receiptItems.count { it.receiptId == receipt.id }
+    val counts =
+        remember(data.receiptItems) { data.receiptItems.groupingBy { it.receiptId }.eachCount() }
+    LazyColumn(
+        Modifier.widthIn(max = 840.dp).fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        item { ShopHeading("Scanned receipts", back) }
+        item {
+            if (busy && data.receipt.receipts.isEmpty()) repeat(3) { ShopLoadingSkeleton() }
+            if (data.receipt.receipts.isEmpty() && data.receipt.drafts.isEmpty() && !busy)
+                Text("Your scanned receipts will appear here.")
+        }
+        items(data.receipt.receipts, key = { "receipt:${it.id}" }) { receipt ->
+            val storedCount = counts[receipt.id] ?: 0
             val count =
                 if (storedCount > 0) storedCount
                 else
@@ -235,7 +289,7 @@ internal fun ScannedReceiptsSection(model: AppModel, data: FinanceSnapshot, busy
                 selected = receipt.id
             }
         }
-        data.receipt.drafts.forEach { draft ->
+        items(data.receipt.drafts, key = { "draft:${it.id}" }) { draft ->
             val parsed = remember(draft.rawText) { ReceiptDraftCodec.parse(draft.rawText) }
             Record(
                 parsed.merchant.ifBlank { "Not specified" },
@@ -252,27 +306,9 @@ internal fun ScannedReceiptsSection(model: AppModel, data: FinanceSnapshot, busy
     data.receipt.drafts
         .find { it.id == draftId }
         ?.let { draft ->
-            val parsed = remember(draft.rawText) { ReceiptDraftCodec.parse(draft.rawText) }
-            StagedEditSheet(
-                "Scanned receipt",
-                parsed.merchant.ifBlank { "Not specified" },
-                false,
-                false,
-                { draftId = null },
-            ) {
-                ShopReceipt(
-                    ShopReceiptModel(
-                        parsed.merchant.ifBlank { "Not specified" },
-                        parsed.date?.toString(),
-                        parsed.lines.mapIndexed { index, line ->
-                            capturedReceiptLine("draft:$index", line)
-                        },
-                        parsed.totalMinor,
-                        scanned = true,
-                        recordedSubtotal = parsed.subtotalMinor,
-                    )
-                )
-            }
+            // A draft is actionable here, without sending the user back to a second receipts
+            // screen.
+            ReceiptReview(model, data, draft, busy, { draftId = null }, { draftId = it })
         }
 }
 

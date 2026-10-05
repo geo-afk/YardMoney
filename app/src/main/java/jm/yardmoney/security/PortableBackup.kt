@@ -33,7 +33,15 @@ class PortableBackup(private val app: YardMoneyApplication) {
             "shopping_items",
         )
 
-    suspend fun export(password: CharArray): ByteArray {
+    suspend fun export(password: CharArray): ByteArray =
+        try {
+            exportInside(password)
+        } finally {
+            // Wipe secrets even when validation, storage, or a cancelled database read fails early.
+            password.fill('\u0000')
+        }
+
+    private suspend fun exportInside(password: CharArray): ByteArray {
         require(password.size >= 12) { "Use a backup password of at least 12 characters." }
         val root =
             app.database.withTransaction {
@@ -93,6 +101,14 @@ class PortableBackup(private val app: YardMoneyApplication) {
     }
 
     suspend fun restore(bytes: ByteArray, password: CharArray) {
+        try {
+            restoreInside(bytes, password)
+        } finally {
+            password.fill('\u0000')
+        }
+    }
+
+    private suspend fun restoreInside(bytes: ByteArray, password: CharArray) {
         require(bytes.size <= 50_000_064 && bytes.size > 49) { "Invalid or oversized backup." }
         val clear =
             try {

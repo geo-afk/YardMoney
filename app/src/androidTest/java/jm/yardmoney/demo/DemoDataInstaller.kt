@@ -335,6 +335,8 @@ class DemoDataInstaller : Instrumentation() {
             }
         }
         val items = repo.dao.readShoppingItems()
-        items.filterIndexed { index, _ -> index % 4 == 0 }.forEach { repo.toggleItem(it) }
+        items
+            .filterIndexed { index, _ -> index % 4 == 0 }
+            .forEach { repo.dao.setShoppingChecked(it.id, !it.checked, it.checked) }
     }
 }

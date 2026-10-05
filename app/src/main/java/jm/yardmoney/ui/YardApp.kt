@@ -193,6 +193,8 @@ private fun MainPages(
         prefs.edit { putString("account_scope", id) }
     }
     val today = model.repo.today
+    // Transition content may retain a callback while a database snapshot changes.
+    val latestData by rememberUpdatedState(data)
     val safe =
         remember(view.ledger.accounts, view.ledger.commitments, view.ledger.profile, today) {
             safe(view, today)
@@ -327,15 +329,16 @@ private fun MainPages(
                         route == "activity" -> tab = "Activity"
                         route.startsWith("pay:") -> {
                             payCommitId = route.substringAfter(':')
-                            txKind =
-                                if (
-                                    data.ledger.commitments
-                                        .first { it.commitment.id == payCommitId }
-                                        .commitment
-                                        .kind == "SAVINGS"
-                                )
-                                    "TRANSFER"
-                                else "EXPENSE"
+                            val commitment =
+                                latestData.ledger.commitments
+                                    .firstOrNull { it.commitment.id == payCommitId }
+                                    ?.commitment
+                            if (commitment == null) {
+                                form = "missingRecord"
+                                payCommitId = null
+                                return
+                            }
+                            txKind = if (commitment.kind == "SAVINGS") "TRANSFER" else "EXPENSE"
                             form = "transaction"
                         }
                         route == "transaction" -> {
@@ -444,19 +447,29 @@ private fun MainPages(
                     initialAccountId = scope,
                 )
             }
-    if (form == "transaction")
-        TransactionForm(
-            model,
-            data,
-            txKind,
-            data.ledger.commitments.find { it.commitment.id == payCommitId }?.commitment,
-            busy,
-            initialAccountId = scope,
-        ) {
-            form = null
-            payCommitId = null
-        }
+    if (form == "transaction") {
+        val payable = data.ledger.commitments.find { it.commitment.id == payCommitId }?.commitment
+        // A cancelled bill must not re-open as an unrelated expense after state restoration.
+        if (payCommitId != null && payable == null)
+            MissingRecordNotice {
+                form = null
+                payCommitId = null
+            }
+        else
+            TransactionForm(
+                model,
+                data,
+                txKind,
+                payable,
+                busy,
+                initialAccountId = scope,
+            ) {
+                form = null
+                payCommitId = null
+            }
+    }
     val close = { form = null }
+    if (form == "missingRecord") MissingRecordNotice(close)
     key(form) {
         when (form) {
             "account" ->
@@ -515,50 +528,58 @@ private fun MainPages(
                 ?.let { LimitEditor(model, data, it, scope, busy, close) }
 
         if (form?.startsWith("editTx:") == true) {
-            val t = data.ledger.transactions.first { it.id == form!!.substringAfter(':') }
-            SimpleForm(
-                "Edit record",
-                listOf("Description", "Category", "Date (YYYY-MM-DD)"),
-                listOf(t.description, t.category, t.date),
-                busy,
-                close,
-                choices =
-                    listOf(
-                        "Budget group" to
-                            listOf(t.bucket) +
-                                listOf("NEEDS", "WANTS", "SAVINGS").filter { it != t.bucket },
-                        "Action" to listOf("Save edits", "Delete record"),
-                    ),
-                description =
-                    "Amounts and account movements stay together. To correct an amount, delete this record and re-enter it.",
-            ) { v, c ->
-                if (c[1] == "Delete record") form = "delete:${t.id}"
-                else
-                    model.act(close) {
-                        model.repo.editRecord(t.id, v[0], v[1], c[0], LocalDate.parse(v[2]))
-                    }
-            }
+            val t = data.ledger.transactions.firstOrNull { it.id == form!!.substringAfter(':') }
+            if (t == null) MissingRecordNotice(close)
+            else
+                SimpleForm(
+                    "Edit record",
+                    listOf("Description", "Category", "Date (YYYY-MM-DD)"),
+                    listOf(t.description, t.category, t.date),
+                    busy,
+                    close,
+                    choices =
+                        listOf(
+                            "Budget group" to
+                                listOf(t.bucket) +
+                                    listOf("NEEDS", "WANTS", "SAVINGS").filter { it != t.bucket },
+                            "Action" to listOf("Save edits", "Delete record"),
+                        ),
+                    description =
+                        "Amounts and account movements stay together. To correct an amount, delete this record and re-enter it.",
+                ) { v, c ->
+                    if (c[1] == "Delete record") form = "delete:${t.id}"
+                    else
+                        model.act(close) {
+                            model.repo.editRecord(t.id, v[0], v[1], c[0], LocalDate.parse(v[2]))
+                        }
+                }
         }
         if (form?.startsWith("editAccount:") == true) {
             val account =
-                data.ledger.accounts.first { it.account.id == form!!.substringAfter(':') }.account
-            SimpleForm(
-                "Account settings",
-                listOf("Name"),
-                listOf(account.name),
-                busy,
-                close,
-                choices =
-                    listOf(
-                        "Spendable?" to
-                            if (account.included) listOf("Included", "Protected")
-                            else listOf("Protected", "Included")
-                    ),
-                description =
-                    "Included balances count towards safe to spend. Protected balances are excluded. This changes your plan, not the amount of money in the account.",
-            ) { v, c ->
-                model.act(close) { model.repo.editAccount(account.id, v[0], c[0] == "Included") }
-            }
+                data.ledger.accounts
+                    .firstOrNull { it.account.id == form!!.substringAfter(':') }
+                    ?.account
+            if (account == null) MissingRecordNotice(close)
+            else
+                SimpleForm(
+                    "Account settings",
+                    listOf("Name"),
+                    listOf(account.name),
+                    busy,
+                    close,
+                    choices =
+                        listOf(
+                            "Spendable?" to
+                                if (account.included) listOf("Included", "Protected")
+                                else listOf("Protected", "Included")
+                        ),
+                    description =
+                        "Included balances count towards safe to spend. Protected balances are excluded. This changes your plan, not the amount of money in the account.",
+                ) { v, c ->
+                    model.act(close) {
+                        model.repo.editAccount(account.id, v[0], c[0] == "Included")
+                    }
+                }
         }
         if (form?.startsWith("editCommit:") == true)
             data.ledger.commitments
@@ -598,6 +619,17 @@ private fun MainPages(
                 .find { it.id == form!!.substringAfter(':') }
                 ?.let { ReceiptDetails(model, it, busy, close) }
     }
+}
+
+@Composable
+private fun MissingRecordNotice(close: () -> Unit) {
+    // Saved routes can outlive a record removed by another writer or a restored backup.
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text("Record unavailable") },
+        text = { Text("This record is no longer available.") },
+        confirmButton = { TextButton(onClick = close) { Text("OK") } },
+    )
 }
 
 private fun nextPayday(p: Profile, today: LocalDate): LocalDate {

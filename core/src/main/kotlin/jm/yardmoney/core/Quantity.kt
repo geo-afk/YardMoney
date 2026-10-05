@@ -19,6 +19,11 @@ object Quantity {
         BigDecimal.valueOf(priceMinor)
             .multiply(parse(quantity))
             .setScale(0, RoundingMode.HALF_UP)
+            // Reject oversized estimates before Long conversion, including extreme quantities.
+            .also {
+                require(it >= BigDecimal.ZERO && it <= BigDecimal.valueOf(Money.MAX_MINOR)) {
+                    "The estimate is too large."
+                }
+            }
             .longValueExact()
-            .also { require(it in 0..Money.MAX_MINOR) { "The estimate is too large." } }
 }
