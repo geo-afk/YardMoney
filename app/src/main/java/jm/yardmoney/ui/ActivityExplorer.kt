@@ -58,13 +58,6 @@ internal fun activityRecords(
         .sortedWith(compareByDescending<MoneyTransaction> { it.date }.thenBy { it.id })
 }
 
-internal data class ActivityBin(
-    val start: LocalDate,
-    val end: LocalDate,
-    val amount: Long,
-    val count: Int,
-)
-
 internal fun activityBins(
     records: List<MoneyTransaction>,
     start: LocalDate,

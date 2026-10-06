@@ -4,8 +4,6 @@ import java.time.LocalDate
 import jm.yardmoney.core.*
 import jm.yardmoney.data.*
 
-internal data class BudgetUsage(val income: Long, val allocation: List<Long>, val used: List<Long>)
-
 internal fun budgetUsage(data: FinanceSnapshot, today: LocalDate): BudgetUsage {
     val p = requireNotNull(data.ledger.profile)
     val current =

@@ -6,13 +6,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import jm.yardmoney.Prefs
+import jm.yardmoney.appearancePrefs
 import jm.yardmoney.reminders.BillReminder
 
 @Composable
 internal fun ReminderSetting() {
     val context = LocalContext.current
     var enabled by remember {
-        mutableStateOf(context.getSharedPreferences("appearance", 0).getBoolean("reminders", false))
+        mutableStateOf(context.appearancePrefs().getBoolean(Prefs.REMINDERS, false))
     }
     val permission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed ->

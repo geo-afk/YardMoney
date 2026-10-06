@@ -1,0 +1,4 @@
+<resources>
+    <!-- Launcher icon background; matches the Palm accent. -->
+    <color name="ic_launcher_background">#145D4D</color>
+</resources>

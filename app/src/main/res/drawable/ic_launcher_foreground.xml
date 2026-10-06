@@ -1,0 +1,12 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Same Y mark as before, kept inside the 66dp adaptive-icon safe zone. -->
+    <path
+        android:pathData="M31,30L54,55L77,30M54,55L54,80"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="9" />
+</vector>

@@ -22,9 +22,12 @@ class ReceiptRecognizer {
                 }
             }
 
+    // Built once; score() runs for every line of every orientation probe.
+    private val moneyLike = Regex("\\d+[.,]\\d{2}")
+
     private fun score(lines: List<Line>) =
         lines.sumOf { it.text.count(Char::isLetterOrDigit) } +
-            lines.count { Regex("\\d+[.,]\\d{2}").containsMatchIn(it.text) } * 12
+            lines.count { moneyLike.containsMatchIn(it.text) } * 12
 
     suspend fun recognize(bitmap: Bitmap, progress: (String) -> Unit = {}): String {
         val reader = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)

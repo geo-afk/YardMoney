@@ -18,19 +18,27 @@ import androidx.compose.ui.unit.dp
 import jm.yardmoney.AppModel
 import jm.yardmoney.core.*
 import jm.yardmoney.data.*
+import jm.yardmoney.savedItemsPrefs
 import org.json.JSONObject
 
-// Catalog corrections are metadata in existing private preferences: historical receipt
-// lines and totals must remain intact when a user edits or removes a saved suggestion.
+/** Changes whenever [prefs] change, so anything derived from them is recomputed. */
 @Composable
-internal fun rememberSavedCatalog(originals: List<CatalogItem>): List<CatalogItem> {
-    val prefs = LocalContext.current.getSharedPreferences("saved_items", 0)
+private fun rememberPrefsRevision(prefs: SharedPreferences): Int {
     var revision by remember(prefs) { mutableIntStateOf(0) }
     DisposableEffect(prefs) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> revision++ }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
+    return revision
+}
+
+// Catalog corrections are metadata in existing private preferences: historical receipt
+// lines and totals must remain intact when a user edits or removes a saved suggestion.
+@Composable
+internal fun rememberSavedCatalog(originals: List<CatalogItem>): List<CatalogItem> {
+    val prefs = LocalContext.current.savedItemsPrefs()
+    val revision = rememberPrefsRevision(prefs)
     return remember(originals, revision) {
         val corrections =
             originals
@@ -59,13 +67,8 @@ internal fun rememberSavedCatalog(originals: List<CatalogItem>): List<CatalogIte
 
 @Composable
 internal fun SavedItemsSection(data: FinanceSnapshot, busy: Boolean, back: () -> Unit) {
-    val prefs = LocalContext.current.getSharedPreferences("saved_items", 0)
-    var revision by remember { mutableIntStateOf(0) }
-    DisposableEffect(prefs) {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> revision++ }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }
+    val prefs = LocalContext.current.savedItemsPrefs()
+    val revision = rememberPrefsRevision(prefs)
     var query by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("All") }
     var sort by rememberSaveable { mutableStateOf("Name") }

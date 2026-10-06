@@ -35,13 +35,13 @@ The current **0.4.2 local pilot** stores financial records on your device and wo
 | Currency | Jamaican dollars (JMD), displayed as J$ where applicable |
 | Android support | Android 8.0 / API 26 minimum; compile and target API 36 |
 | Accounts and connectivity | Local use without sign-in; optional identity and cloud backup remain planned |
-| Latest host verification | 104 unit tests passed |
-| Latest device verification | 89 instrumentation tests passed on a Pixel 8 Pro |
-| Build checks | Debug, instrumentation APK and optimized unsigned release builds passed |
-| Android lint | Zero errors and 41 warnings in the latest full verification |
+| Latest host verification | 120 unit tests passed on 6 October 2026 |
+| Previous device verification | 89 instrumentation tests passed on a Pixel 8 Pro on 4 October 2026; not rerun for the current changes |
+| Latest build checks | Debug APK assembled; signature and 16 KB ZIP alignment verified |
+| Android lint | Zero errors and 46 warnings on 6 October 2026 |
 | License | MIT; copyright 2026 Geovanni Stewart |
 
-Verification was recorded on **4 October 2026**. These results describe the tested source, not every Android device or every real receipt. Camera usability, real-receipt accuracy, fresh-device recovery, background reminders and a broader accessibility/device matrix still need manual validation. See [the device checklist](docs/07-device-validation.md).
+The current-source checks were recorded on **6 October 2026**: debug assembly, core/app host tests and debug lint. Instrumentation APK compilation, device tests and optimized release assembly were not rerun for these changes; the 4 October device results describe an earlier source revision. These results do not establish behavior on every Android device or every real receipt. Camera usability, real-receipt accuracy, fresh-device recovery, background reminders and a broader accessibility/device matrix still need manual validation. See [the device checklist](docs/07-device-validation.md).
 
 ## Who it is for
 
@@ -77,6 +77,14 @@ The app uses Material calendar date selection, dollar prefixes and grouped curre
 The money-entry form scrolls independently of its sheet. Returning to the top keeps it open; a new deliberate downward pull at the top closes it. The fixed Save action remains reachable with the keyboard open.
 
 Main navigation follows the selected motion preference: Calm, Slide, Expressive or Off. Corner preferences are Square, Soft and Rounded; spacing preferences are Compact and Comfortable. Wider windows use a navigation rail.
+
+### Reliability and responsiveness
+
+The system authentication prompt opens when app authentication is required. If you cancel or authentication fails, YardMoney stays locked and offers an **Unlock** action to try again. If the device screen lock was removed, the lock screen explains how to restore access. Forms and navigation state are retained across lock/unlock.
+
+Date pickers disable dates outside the range accepted by the relevant form. Exceeded category limits display **Over by** in the error color, section titles are marked as headings for TalkBack, and reminders use a dedicated status-bar icon. Receipt-photo processing handles memory exhaustion with a readable error, while reminder retries are capped.
+
+Shopping checkbox updates read shopping tables separately from the ledger, avoiding a full ledger reload for each tap. Recurring bill generation looks up existing occurrences once per bill series, and reports/category-limit totals are reused when their underlying data has not changed. These are implementation improvements; no before/after speed benchmark has been recorded.
 
 ## Screenshots
 
@@ -164,7 +172,7 @@ OCR suggestions do not post money automatically. Duplicate warnings need review,
 
 Reviewed receipt items can supply product and price observations with branch/date and quantity information. Use them alongside manually entered estimates in a shopping checklist. Coverage indicators help show which estimates have supporting observations; an old observation is not a live retailer price.
 
-Use local insights to search, compare spending periods and inspect category or merchant totals. CSV export creates a readable financial file for use elsewhere. CSV is not an encrypted recovery backup.
+Use local insights to search, compare spending periods and inspect category or merchant totals. CSV export creates a readable financial file for use elsewhere. Text that could be interpreted as a spreadsheet formula is neutralized on export. CSV is not an encrypted recovery backup.
 
 ## Privacy, security and backup
 
@@ -183,6 +191,12 @@ Financial records are held locally. The app manifest explicitly removes the Inte
 Portable backups use AES-GCM and PBKDF2-HMAC-SHA256 with 600,000 iterations and a fresh salt. The backup password must contain at least 12 characters. Keep both the backup file and its password somewhere you can recover them. The pilot has no online password-recovery service.
 
 Uninstalling the app, clearing its storage or losing the device can remove local records and keys. Create a portable backup before destructive actions. Test restoration with fictional records before depending on it for recovery. Do not treat a database file copied from private storage or a CSV export as a substitute for the supported encrypted backup.
+
+### Delete local records and recover unreadable data
+
+**Delete local records** clears database records and stored receipt files, saved shop items, the selected account scope and any in-progress shopping list. Appearance preferences are separate from personal financial records. Save a portable backup first if you want to retain the data.
+
+If YardMoney cannot open its database or encryption key, try **Retry** first. **Start over** requires typing `DELETE` and permanently removes the local database, its wrapped encryption key, stored receipt images and saved personal preferences. The app can then start empty and restore a portable backup through its normal data controls. Backups you saved elsewhere are not deleted; starting over does not recover unreadable records by itself.
 
 Camera access is used for receipt capture; notifications are used for bill reminders; biometric support enables optional app authentication. Device/OS permissions and notification settings can affect these features. Do not publish receipts, balances, backup passwords or exported financial files in issue reports.
 
@@ -278,6 +292,22 @@ Windows is the verified development environment. These equivalent wrapper comman
 
 ## Testing and verification
 
+### Build and check the debug APK
+
+After configuring the Java and SDK environment above, run:
+
+```powershell
+.\gradlew.bat :app:assembleDebug :core:test :app:testDebugUnitTest :app:lintDebug --console=plain
+```
+
+This produces a signed development APK at `app/build/outputs/apk/debug/app-debug.apk` and runs host tests and debug lint. It does not execute device tests or assemble the optimized release. To verify the APK using build-tools 36.0.0, substitute your actual SDK directory:
+
+```powershell
+$sdkDirectory = 'C:\Users\YourName\AppData\Local\Android\Sdk'
+& "$sdkDirectory\build-tools\36.0.0\apksigner.bat" verify --print-certs '.\app\build\outputs\apk\debug\app-debug.apk'
+& "$sdkDirectory\build-tools\36.0.0\zipalign.exe" -c -P 16 4 '.\app\build\outputs\apk\debug\app-debug.apk'
+```
+
 ### Full local verification
 
 ```powershell
@@ -311,7 +341,9 @@ Run `./scripts/install-demo.ps1` to build and install **YardMoney Demo**, a sepa
 
 ### Evidence and reports
 
-The latest full run passed 104 host tests and 89 device tests on a Pixel 8 Pro, with no skipped device tests. Receipt regression coverage checks ambiguous uniform images as well as a recognizable paper quadrilateral. UI tests cover forms, calendar behavior, category selection and appearance; repository tests use isolated databases for ledger invariants.
+On **6 October 2026**, `:app:assembleDebug :core:test :app:testDebugUnitTest :app:lintDebug` completed successfully against the current source. All **120 host tests passed**, with no failures, errors or skipped tests; lint reported **0 errors and 46 warnings**. The generated debug APK passed signing-certificate verification and 16 KB ZIP alignment checks. The newer host tests cover readable error messages, date windows, spreadsheet-safe CSV values and differential report/category-limit calculations.
+
+The previous full run on **4 October 2026** passed 104 host tests and 89 device tests on a Pixel 8 Pro, with no skipped device tests. Device tests and release assembly have not been rerun for the current hardening and refactoring changes. Receipt regression coverage checks ambiguous uniform images as well as a recognizable paper quadrilateral. UI tests cover forms, calendar behavior, category selection and appearance; repository tests use isolated databases for ledger invariants.
 
 | Report | Generated location |
 | --- | --- |
@@ -345,9 +377,17 @@ YardMoney/
 └── core/gradle.lockfile        Core dependency locks
 ```
 
+The Android source is organized into smaller files:
+
+- `CommonUi`, `SetupPage`, `FormHost` and `DataRecovery` contain shared controls and focused app flows.
+- `ShopEditor`, `ShopItemRow` and `ShopDetail` separate shopping editing, rows and detail views.
+- `PlanCalculations`, `FinancialSummary` and `CategoryLimitUsage` hold calculations used by charts and reports.
+- `Models`, `ReceiptModels`, `UiModels`, `UiPreferences` and `ShopModels` hold data and UI types.
+- `Prefs` centralizes preference names, `JamaicaTime` supplies the Jamaica-time clock, and `UserMessages` maps failures to readable text.
+
 Application ID: `jm.yardmoney`. Current Room schema version: 3. The root project and repository are named `YardMoney`; changing a folder name does not change the Android application ID.
 
-Navigation uses saveable Compose root destinations and dialogs. The implementation does not currently use Navigation Compose or Navigation 3. The five root destinations are Home, Activity, Plan, Shop and More.
+Navigation uses saveable Compose root destinations and dialogs. A `SaveableStateHolder` retains forms, the selected tab and supported scroll state across app lock/unlock. Back from another root tab returns to Home first, and the manifest opts in to predictive back. The implementation does not currently use Navigation Compose or Navigation 3. The five root destinations are Home, Activity, Plan, Shop and More.
 
 ## Financial and receipt rules
 

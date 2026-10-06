@@ -8,13 +8,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 
-enum class MotionStyle {
-    Calm,
-    Slide,
-    Expressive,
-    Off,
-}
-
 internal val LocalMotion = staticCompositionLocalOf { MotionStyle.Calm }
 
 internal fun MotionStyle.duration() =

@@ -12,6 +12,13 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+/** Names of files the app creates itself; anything else is never read, deleted or restored. */
+internal object ReceiptNames {
+    val id = Regex("[a-zA-Z0-9-]+")
+    val storedFile = Regex("[a-zA-Z0-9-]+\\.bin")
+    val tempPhoto = Regex("receipt-[a-zA-Z0-9-]+\\.jpg")
+}
+
 /**
  * Keystore wraps the DB passphrase and encrypts receipt files. Loss of keys never silently resets
  * data.
@@ -26,7 +33,7 @@ class PrivateStorage(private val context: Context) {
             return it
         }
         check(!File(context.noBackupFilesDir, "database-key.bin").exists()) {
-            "Your encryption key is missing. Restore a portable backup; do not overwrite existing data."
+            "Your encryption key is missing, so this data cannot be opened. Choose Start over, then restore a portable backup."
         }
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
             .apply {
@@ -64,7 +71,7 @@ class PrivateStorage(private val context: Context) {
         if (file.baseFile.exists()) return decrypt(file.readFully())
         // Existing DB without its wrapper key must be recovered, never opened with a new key.
         check(!context.getDatabasePath("yardmoney.db").exists()) {
-            "The database key is missing. Recovery is required."
+            "The database key is missing, so this data cannot be opened. Choose Start over, then restore a portable backup."
         }
         val random = ByteArray(32).also { SecureRandom().nextBytes(it) }
         val stream = file.startWrite()
@@ -79,7 +86,7 @@ class PrivateStorage(private val context: Context) {
     }
 
     fun saveReceipt(id: String, bytes: ByteArray): String {
-        require(Regex("[a-zA-Z0-9-]+").matches(id))
+        require(ReceiptNames.id.matches(id))
         require(bytes.isNotEmpty() && bytes.size <= 15_000_000) {
             "Receipt image is empty or too large."
         }
@@ -97,14 +104,14 @@ class PrivateStorage(private val context: Context) {
     }
 
     fun readReceipt(ref: String): ByteArray {
-        require(Regex("[a-zA-Z0-9-]+\\.bin").matches(ref))
+        require(ReceiptNames.storedFile.matches(ref))
         val file = File(context.noBackupFilesDir, "receipts/$ref")
         require(file.length() <= 15_000_030) { "Stored receipt image is too large." }
         return decrypt(file.readBytes())
     }
 
     fun deleteReceipt(ref: String) {
-        require(Regex("[a-zA-Z0-9-]+\\.bin").matches(ref))
+        require(ReceiptNames.storedFile.matches(ref))
         File(context.noBackupFilesDir, "receipts/$ref").delete()
     }
 
@@ -116,7 +123,7 @@ class PrivateStorage(private val context: Context) {
             .listFiles()
             ?.filter {
                 it.isFile &&
-                    Regex("receipt-[a-zA-Z0-9-]+\\.jpg").matches(it.name) &&
+                    ReceiptNames.tempPhoto.matches(it.name) &&
                     it.lastModified() < cutoff
             }
             ?.forEach { it.delete() }
@@ -125,7 +132,7 @@ class PrivateStorage(private val context: Context) {
     fun deleteAllReceiptFiles() {
         File(context.noBackupFilesDir, "receipts")
             .listFiles()
-            ?.filter { it.isFile && Regex("[a-zA-Z0-9-]+\\.bin").matches(it.name) }
+            ?.filter { it.isFile && ReceiptNames.storedFile.matches(it.name) }
             ?.forEach { check(it.delete()) { "A receipt file could not be deleted." } }
         File(context.cacheDir, "exports")
             .listFiles()
@@ -133,11 +140,26 @@ class PrivateStorage(private val context: Context) {
             ?.forEach { it.delete() }
     }
 
+    /**
+     * Last-resort recovery when the database or its key can no longer be opened: removes the
+     * database, its wrapped key, stored receipt images and the Keystore key so the app can start
+     * empty. Only reachable from the "cannot open your data" screen after a typed confirmation.
+     */
+    @Synchronized
+    fun resetAll() {
+        context.deleteDatabase("yardmoney.db")
+        AtomicFile(File(context.noBackupFilesDir, "database-key.bin")).delete()
+        deleteAllReceiptFiles()
+        runCatching {
+            KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(alias)
+        }
+    }
+
     fun removeUnusedReceiptFiles(keep: Set<String>) {
         File(context.noBackupFilesDir, "receipts")
             .listFiles()
             ?.filter {
-                it.isFile && Regex("[a-zA-Z0-9-]+\\.bin").matches(it.name) && it.name !in keep
+                it.isFile && ReceiptNames.storedFile.matches(it.name) && it.name !in keep
             }
             ?.forEach { it.delete() }
     }

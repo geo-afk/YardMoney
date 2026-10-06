@@ -6,8 +6,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import jm.yardmoney.AppModel
+import jm.yardmoney.Prefs
+import jm.yardmoney.appearancePrefs
 import jm.yardmoney.core.*
+import jm.yardmoney.data.spreadsheetSafe
 import jm.yardmoney.reminders.BillReminder
 
 @Composable
@@ -16,6 +20,7 @@ internal fun DataControls(model: AppModel) {
     var confirm by remember { mutableStateOf("") }
     var export by remember { mutableStateOf(false) }
     val busy by model.busy.collectAsState()
+    val drafts: ShopDraftViewModel = viewModel()
     val file =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri
             ->
@@ -26,7 +31,7 @@ internal fun DataControls(model: AppModel) {
                         model.repo.dao.readTransactions().forEach { t ->
                             append(
                                 listOf(t.date, t.kind, t.description, t.category, t.bucket)
-                                    .joinToString(",", transform = Csv::text)
+                                    .joinToString(",") { Csv.text(spreadsheetSafe(it)) }
                             )
                             append(',')
                             append(Money.input(t.amountMinor))
@@ -102,18 +107,21 @@ internal fun DataControls(model: AppModel) {
                 TextButton(
                     enabled = !busy && confirm == "DELETE",
                     onClick = {
-                        model.act({ erase = false }) {
-                            model.app.database.openHelper.writableDatabase.execSQL(
-                                "PRAGMA secure_delete=ON"
-                            )
+                        model.act({
+                            erase = false
+                            // A half-built shopping list must not survive "delete everything".
+                            drafts.store(null)
+                        }) {
+                            // PRAGMA setters return a row, which execSQL can reject; query it.
+                            model.app.database.openHelper.writableDatabase
+                                .query("PRAGMA secure_delete=ON")
+                                .use { it.moveToFirst() }
                             model.app.database.clearAllTables()
                             model.app.storage.deleteAllReceiptFiles()
                             BillReminder.setEnabled(model.app, false)
-                            model.app
-                                .getSharedPreferences("appearance", 0)
-                                .edit()
-                                .putBoolean("lock", false)
-                                .apply()
+                            // Saved shop items and the account view live outside the database.
+                            model.clearPersonalPreferences()
+                            model.app.appearancePrefs().edit().putBoolean(Prefs.LOCK, false).apply()
                         }
                     },
                     shape = MaterialTheme.shapes.small,

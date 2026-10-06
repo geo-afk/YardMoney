@@ -136,21 +136,33 @@ internal fun SettingsPage(model: AppModel, data: FinanceSnapshot, open: (String)
                 "Scanning uses Google's ML Kit. Review its privacy information alongside YardMoney's notices.",
                 style = MaterialTheme.typography.bodySmall,
             )
+            var linkFailed by remember { mutableStateOf(false) }
             TextButton(
                 onClick = {
-                    context.startActivity(
-                        Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse(
-                                "https://developers.google.com/ml-kit/android-data-disclosure"
-                            ),
-                        )
-                    )
+                    // Throws when no browser is installed or enabled; explain instead of crashing.
+                    linkFailed =
+                        runCatching {
+                                context.startActivity(
+                                    Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse(
+                                            "https://developers.google.com/ml-kit/android-data-disclosure"
+                                        ),
+                                    )
+                                )
+                            }
+                            .isFailure
                 },
                 shape = MaterialTheme.shapes.small,
             ) {
                 Text("Receipt-scanning privacy information")
             }
+            if (linkFailed)
+                Text(
+                    "No web browser is available. Search for \"ML Kit data disclosure\" on another device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
         }
         SettingsGroup(
             "Backup & data",

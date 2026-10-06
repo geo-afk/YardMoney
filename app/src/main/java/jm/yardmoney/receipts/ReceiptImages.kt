@@ -5,6 +5,7 @@ import android.graphics.*
 import android.net.Uri
 import androidx.exifinterface.media.ExifInterface
 import java.io.ByteArrayOutputStream
+import jm.yardmoney.security.ReceiptNames
 
 object ReceiptImages {
     fun read(context: Context, uri: Uri): ByteArray =
@@ -56,7 +57,7 @@ object ReceiptImages {
     fun deleteTemporaryCapture(context: Context, uri: Uri) {
         if (uri.authority == "${context.packageName}.files")
             uri.lastPathSegment
-                ?.takeIf { Regex("receipt-[a-zA-Z0-9-]+\\.jpg").matches(it) }
+                ?.takeIf { ReceiptNames.tempPhoto.matches(it) }
                 ?.let { java.io.File(context.cacheDir, "exports/$it").delete() }
     }
 }

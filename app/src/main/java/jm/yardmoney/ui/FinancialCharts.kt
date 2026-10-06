@@ -13,7 +13,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
-import java.time.YearMonth
 import jm.yardmoney.core.*
 import jm.yardmoney.data.*
 
@@ -181,73 +180,27 @@ internal fun BudgetOverview(
 
 @Composable
 internal fun FinancialCharts(data: FinanceSnapshot, today: LocalDate) {
-    val p = data.ledger.profile ?: return
-    val transactions =
-        data.ledger.transactions.filter { it.date >= p.periodStart && it.date <= today.toString() }
+    // Arithmetic over the whole ledger runs once per data revision, not on every recomposition.
+    val summary = remember(data, today) { financialSummary(data, today) } ?: return
     val colors = chartColors()
-    val income = Money.sum(transactions.filter { it.kind == "INCOME" }.map { it.amountMinor })
-    val spending =
-        Money.sum(
-            transactions
-                .filter { it.kind in listOf("EXPENSE", "REFUND") }
-                .map { if (it.kind == "REFUND") -it.amountMinor else it.amountMinor }
-        )
     MoneyCard {
         SectionHeading("Income and spending")
-        ChartBars(listOf("Income" to income, "Spending less refunds" to spending), colors)
+        ChartBars(
+            listOf("Income" to summary.income, "Spending less refunds" to summary.spending),
+            colors,
+        )
     }
-    val ids = transactions.map { it.id }.toSet()
-    val categories =
-        data.splits
-            .filter { it.transactionId in ids }
-            .groupBy { it.category }
-            .map { (label, rows) -> label to Money.sum(rows.map { it.amountMinor }) }
-            .sortedByDescending { it.second }
-            .take(8)
     MoneyCard {
         SectionHeading("Spending by category")
-        ChartBars(categories, colors, categoryColors = true)
+        ChartBars(summary.categories, colors, categoryColors = true)
     }
-    // Refunds retain their original merchant grouping rather than an arbitrary refund description.
-    val merchants =
-        transactions
-            .filter { it.kind in listOf("EXPENSE", "REFUND") }
-            .groupBy { t ->
-                if (t.kind == "REFUND")
-                    data.ledger.transactions.find { it.id == t.refundOfId }?.description
-                        ?: t.description
-                else t.description
-            }
-            .map { (label, rows) ->
-                label.ifBlank { "Unspecified merchant" } to
-                    Money.sum(
-                        rows.map { if (it.kind == "REFUND") -it.amountMinor else it.amountMinor }
-                    )
-            }
-            .sortedByDescending { it.second }
-            .take(8)
     MoneyCard {
         SectionHeading("Spending by merchant")
-        ChartBars(merchants, colors)
+        ChartBars(summary.merchants, colors)
     }
-    val month = YearMonth.from(today)
-    val months =
-        (5 downTo 0).map { ago ->
-            val m = month.minusMonths(ago.toLong())
-            m.toString() to
-                Money.sum(
-                    data.ledger.transactions
-                        .filter {
-                            it.date >= m.atDay(1).toString() &&
-                                it.date <= minOf(m.atEndOfMonth(), today).toString() &&
-                                it.kind in listOf("EXPENSE", "REFUND")
-                        }
-                        .map { if (it.kind == "REFUND") -it.amountMinor else it.amountMinor }
-                )
-        }
     MoneyCard {
         SectionHeading("Six-month spending trend")
-        ChartBars(months, colors)
+        ChartBars(summary.months, colors)
         Text(
             "Recorded data only; zero months may have no records. Transfers are excluded.",
             style = MaterialTheme.typography.bodySmall,

@@ -134,7 +134,7 @@ class PortableBackup(private val app: YardMoneyApplication) {
         val refs = mutableMapOf<String, String>()
         try {
             images.keys().forEach { ref ->
-                require(Regex("[a-zA-Z0-9-]+\\.bin").matches(ref))
+                require(ReceiptNames.storedFile.matches(ref))
                 val data = Base64.decode(images.getString(ref), Base64.NO_WRAP)
                 refs[ref] = app.storage.saveReceipt(FinanceRepository.id(), data)
                 data.fill(0)

@@ -55,7 +55,7 @@ internal fun ReceiptReview(
                 .getOrNull()
         }
     fun savedText(name: String, fallback: String) = saved?.optString(name, fallback) ?: fallback
-    val key = rememberSaveable { FinanceRepository.id() }
+    val key = rememberSaveable(draft.id) { FinanceRepository.id() }
     var merchant by
         rememberSaveable(draft.id) { mutableStateOf(savedText("merchant", suggestion.merchant)) }
     var branch by

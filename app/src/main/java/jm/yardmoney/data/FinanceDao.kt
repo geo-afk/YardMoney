@@ -109,6 +109,9 @@ interface FinanceDao {
     @Query("SELECT COUNT(*) FROM commitments WHERE occurrenceKey=:key")
     suspend fun occurrenceCount(key: String): Int
 
+    @Query("SELECT occurrenceKey FROM commitments WHERE occurrenceKey LIKE :prefix")
+    suspend fun occurrenceKeys(prefix: String): List<String>
+
     @Insert suspend fun insert(settlement: Settlement)
 
     @Query(

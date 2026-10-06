@@ -26,12 +26,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
-internal data class MoneyDestination(
-    val label: String,
-    val filled: ImageVector,
-    val outlined: ImageVector,
-)
-
 internal val moneyDestinations =
     listOf(
         MoneyDestination("Home", Icons.Default.Home, Icons.Outlined.Home),

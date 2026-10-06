@@ -28,12 +28,6 @@ import kotlinx.coroutines.launch
 
 internal val LocalEditDismiss = staticCompositionLocalOf<() -> Unit> { {} }
 
-internal enum class EditStage {
-    Full,
-    Half,
-    Peek,
-}
-
 // Material3 1.4.0 (2025-09-24) is the app's locked, maintained Material version.
 // Its SheetValue offers Expanded/PartiallyExpanded/Hidden, not three visible anchors.
 // Foundation 1.9.4 (2025-10-22) is already installed with Kotlin 2.3.20 and minSdk 26;

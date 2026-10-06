@@ -10,22 +10,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.ViewModel
+import jm.yardmoney.ui.LockScreen
 import jm.yardmoney.ui.YardApp
-import jm.yardmoney.ui.YardTheme
-
-class LockSession : ViewModel() {
-    var initialized = false
-    var locked by mutableStateOf(false)
-    var promptInFlight = false
-}
 
 class MainActivity : FragmentActivity() {
     private val lockSession by viewModels<LockSession>()
@@ -45,18 +34,21 @@ class MainActivity : FragmentActivity() {
     private val credential =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             promptInFlight = false
-            if (it.resultCode == Activity.RESULT_OK) locked = false else finish()
+            if (it.resultCode == Activity.RESULT_OK) markUnlocked()
+            // Cancelled: stay on the lock screen (Unlock retries) instead of closing the app, and
+            // do not re-open the prompt the moment this screen resumes.
+            else lockSession.autoPrompt = false
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        when (getSharedPreferences("appearance", 0).getString("theme", "System")) {
+        when (appearancePrefs().getString(Prefs.THEME, "System")) {
             "Light" -> setTheme(R.style.Theme_YardMoney_Light)
             "Dark" -> setTheme(R.style.Theme_YardMoney_Dark)
             "AMOLED" -> setTheme(R.style.Theme_YardMoney_Black)
         }
         super.onCreate(savedInstanceState)
         if (!lockSession.initialized) {
-            locked = getSharedPreferences("appearance", 0).getBoolean("lock", false)
+            locked = appearancePrefs().getBoolean(Prefs.LOCK, false)
             lockSession.initialized = true
         }
         biometricPrompt = createBiometricPrompt()
@@ -66,37 +58,27 @@ class MainActivity : FragmentActivity() {
         if (!BuildConfig.APPLICATION_ID.endsWith(".demo"))
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         setContent {
-            if (locked)
-                YardTheme {
-                    Surface(Modifier.fillMaxSize()) {
-                        Column(
-                            Modifier.safeDrawingPadding().padding(32.dp),
-                            verticalArrangement = Arrangement.spacedBy(20.dp),
-                        ) {
-                            Text(
-                                "YardMoney is locked",
-                                style = MaterialTheme.typography.headlineMedium,
-                            )
-                            Text("Confirm your device screen lock to continue.")
-                        }
-                    }
-                }
-            else YardApp()
+            // Locking removes the app from composition; the holder keeps half-filled forms, the
+            // selected tab and scroll positions, so unlocking returns to where the person was.
+            val screens = rememberSaveableStateHolder()
+            if (locked) LockScreen(notice = lockSession.notice, onUnlock = ::unlockByRequest)
+            else screens.SaveableStateProvider("app") { YardApp() }
         }
     }
 
     override fun onResume() {
         super.onResume()
-        if (locked && !promptInFlight) unlock()
+        if (locked && !promptInFlight && lockSession.autoPrompt) unlock()
     }
 
     override fun onStop() {
         if (
             !isChangingConfigurations &&
                 !promptInFlight &&
-                getSharedPreferences("appearance", 0).getBoolean("lock", false)
+                appearancePrefs().getBoolean(Prefs.LOCK, false)
         )
             locked = true
+        lockSession.autoPrompt = true
         super.onStop()
     }
 
@@ -104,24 +86,36 @@ class MainActivity : FragmentActivity() {
         require(!enabled || getSystemService(KeyguardManager::class.java).isDeviceSecure) {
             "Set a device screen lock in Android Settings first."
         }
-        getSharedPreferences("appearance", 0).edit().putBoolean("lock", enabled).apply()
+        appearancePrefs().edit().putBoolean(Prefs.LOCK, enabled).apply()
         if (enabled) {
             locked = true
             unlock()
         }
     }
 
+    private fun markUnlocked() {
+        lockSession.notice = null
+        locked = false
+    }
+
+    private fun unlockByRequest() {
+        lockSession.autoPrompt = true
+        unlock()
+    }
+
     private fun useCredential() {
-        getSystemService(KeyguardManager::class.java)
-            .createConfirmDeviceCredentialIntent(
-                "Unlock YardMoney",
-                "Confirm your device screen lock",
-            )
-            ?.let(credential::launch)
-            ?: run {
-                promptInFlight = false
-                finish()
-            }
+        val intent =
+            getSystemService(KeyguardManager::class.java)
+                .createConfirmDeviceCredentialIntent(
+                    "Unlock YardMoney",
+                    "Confirm your device screen lock",
+                )
+        if (intent == null) {
+            // The device screen lock was removed after App lock was switched on. Stay locked and
+            // say what to do rather than closing with no explanation.
+            promptInFlight = false
+            lockSession.notice = "Set a device screen lock in Android Settings, then tap Unlock."
+        } else credential.launch(intent)
     }
 
     private fun unlock() {
@@ -153,19 +147,25 @@ class MainActivity : FragmentActivity() {
                     result: BiometricPrompt.AuthenticationResult
                 ) {
                     promptInFlight = false
-                    locked = false
+                    markUnlocked()
                 }
 
                 override fun onAuthenticationError(code: Int, message: CharSequence) {
-                    if (
-                        code == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
-                            code == BiometricPrompt.ERROR_LOCKOUT ||
-                            code == BiometricPrompt.ERROR_LOCKOUT_PERMANENT
-                    )
-                        useCredential()
-                    else {
-                        promptInFlight = false
-                        finish()
+                    when (code) {
+                        BiometricPrompt.ERROR_NEGATIVE_BUTTON,
+                        BiometricPrompt.ERROR_LOCKOUT,
+                        BiometricPrompt.ERROR_LOCKOUT_PERMANENT -> useCredential()
+                        else -> {
+                            // Dismissed, timed out or hardware hiccup: stay locked so Unlock can
+                            // retry. Only real failures are explained; a cancel is not an error.
+                            promptInFlight = false
+                            val cancelled =
+                                code == BiometricPrompt.ERROR_USER_CANCELED ||
+                                    code == BiometricPrompt.ERROR_CANCELED
+                            if (code == BiometricPrompt.ERROR_USER_CANCELED)
+                                lockSession.autoPrompt = false
+                            lockSession.notice = if (cancelled) null else message.toString()
+                        }
                     }
                 }
             },

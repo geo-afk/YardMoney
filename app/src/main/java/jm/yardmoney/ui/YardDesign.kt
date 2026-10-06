@@ -49,8 +49,6 @@ internal object YardShape {
         @Composable get() = MaterialTheme.shapes.medium
 }
 
-internal data class MoneyIdentity(val icon: ImageVector, val seed: Long)
-
 private val identitySeeds =
     listOf(
         0xFF00865A,
@@ -147,6 +145,7 @@ internal fun SectionHeading(
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(YardSpace.xs)) {
             Text(
                 title,
+                modifier = Modifier.semantics { heading() },
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
@@ -288,11 +287,6 @@ internal fun CategoryLimits(
     today: LocalDate,
     edit: (CategoryLimit) -> Unit,
 ) {
-    val ids =
-        data.ledger.transactions
-            .filter { it.date >= data.ledger.profile!!.periodStart && it.date <= today.toString() }
-            .map { it.id }
-            .toSet()
     if (data.limits.isEmpty())
         EmptyState(
             "Give your categories a little direction",
@@ -300,30 +294,16 @@ internal fun CategoryLimits(
             icon = Icons.Default.Tune,
         )
     else {
+        // Once per data revision: expanding a card or animating its chevron must not rescan splits.
+        val spent = remember(data, today) { categoryLimitUsage(data, today) }
         var expanded by rememberSaveable { mutableStateOf(listOf<String>()) }
         Row {
             TextButton(onClick = { expanded = data.limits.map { it.id } }) { Text("Expand all") }
             TextButton(onClick = { expanded = emptyList() }) { Text("Collapse all") }
         }
         data.limits.forEach { limit ->
-            val accountTxIds =
-                limit.accountId?.let { accountId ->
-                    data.accountEntries
-                        .filter { it.accountId == accountId }
-                        .map { it.transactionId }
-                        .toSet()
-                }
-            val used =
-                Money.sum(
-                    data.splits
-                        .filter {
-                            it.transactionId in ids &&
-                                (accountTxIds == null || it.transactionId in accountTxIds) &&
-                                it.bucket == limit.bucket &&
-                                it.category.equals(limit.category, true)
-                        }
-                        .map { it.amountMinor }
-                )
+            val used = spent[limit.id] ?: 0L
+            val over = used > limit.limitMinor
             val open = limit.id in expanded
             val angle by
                 androidx.compose.animation.core.animateFloatAsState(
@@ -361,6 +341,9 @@ internal fun CategoryLimits(
                             else 0f
                         },
                         modifier = Modifier.fillMaxWidth().height(4.dp),
+                        color =
+                            if (over) MaterialTheme.colorScheme.error
+                            else ProgressIndicatorDefaults.linearColor,
                     )
                     if (open) {
                         Text(
@@ -371,7 +354,12 @@ internal fun CategoryLimits(
                                     ?.account
                                     ?.name ?: "All accounts")
                         )
-                        Text("Remaining: ${Money.format(limit.limitMinor - used)}")
+                        Text(
+                            if (over) "Over by ${Money.format(used - limit.limitMinor)}"
+                            else "Remaining: ${Money.format(limit.limitMinor - used)}",
+                            color =
+                                if (over) MaterialTheme.colorScheme.error else Color.Unspecified,
+                        )
                         TextButton(onClick = { edit(limit) }) { Text("Edit category limit") }
                     }
                 }
@@ -379,13 +367,6 @@ internal fun CategoryLimits(
         }
     }
 }
-
-internal data class IdentityOption(
-    val id: String,
-    val label: String,
-    val detail: String = "",
-    val identity: MoneyIdentity = categoryIdentity(label),
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -7,21 +7,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import jm.yardmoney.Prefs
+import jm.yardmoney.appearancePrefs
 import jm.yardmoney.core.ColorContrast
 import jm.yardmoney.data.ShoppingItem
-
-enum class ReceiptLayout {
-    Thermal,
-    Minimal,
-    Compact,
-    Detailed,
-}
-
-internal data class ReceiptAppearance(
-    val layout: ReceiptLayout = ReceiptLayout.Thermal,
-    val background: Int = -1,
-    val sync: Boolean = false,
-)
 
 internal fun receiptBackground(settings: ReceiptAppearance, background: Int, accent: Int): Int =
     if (settings.sync) ColorContrast.blend(background, accent, .06) else settings.background
@@ -30,16 +19,16 @@ internal fun receiptInk(background: Int) = ColorContrast.readable(0xFF222222.toI
 
 private fun SharedPreferences.receiptAppearance() =
     ReceiptAppearance(
-        runCatching { ReceiptLayout.valueOf(getString("receiptLayout", "Thermal")!!) }
+        runCatching { ReceiptLayout.valueOf(getString(Prefs.RECEIPT_LAYOUT, "Thermal")!!) }
             .getOrDefault(ReceiptLayout.Thermal),
-        getInt("receiptBackground", -1),
-        getBoolean("receiptSync", false),
+        getInt(Prefs.RECEIPT_BACKGROUND, -1),
+        getBoolean(Prefs.RECEIPT_SYNC, false),
     )
 
 @Composable
 internal fun rememberReceiptAppearance(): ReceiptAppearance {
     val context = LocalContext.current
-    val prefs = remember(context) { context.getSharedPreferences("appearance", 0) }
+    val prefs = remember(context) { context.appearancePrefs() }
     var settings by remember(prefs) { mutableStateOf(prefs.receiptAppearance()) }
     DisposableEffect(prefs) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
@@ -53,7 +42,7 @@ internal fun rememberReceiptAppearance(): ReceiptAppearance {
 
 @Composable
 internal fun ReceiptSettings() {
-    val prefs = LocalContext.current.getSharedPreferences("appearance", 0)
+    val prefs = LocalContext.current.appearancePrefs()
     val settings = rememberReceiptAppearance()
     val sample =
         ShopReceiptModel(
@@ -79,7 +68,7 @@ internal fun ReceiptSettings() {
     Text("Receipt layout", style = MaterialTheme.typography.titleMedium)
     ReceiptLayout.entries.forEach { layout ->
         OutlinedButton(
-            onClick = { prefs.edit().putString("receiptLayout", layout.name).apply() },
+            onClick = { prefs.edit().putString(Prefs.RECEIPT_LAYOUT, layout.name).apply() },
             // A receipt thumbnail is taller than a normal button: capsule clipping hides its edges.
             shape = MaterialTheme.shapes.medium,
             modifier = Modifier.fillMaxWidth(),
@@ -100,7 +89,7 @@ internal fun ReceiptSettings() {
         }
     }
     Tick("Sync receipt background with app background", settings.sync) {
-        prefs.edit().putBoolean("receiptSync", it).apply()
+        prefs.edit().putBoolean(Prefs.RECEIPT_SYNC, it).apply()
     }
     Text("Background color")
     listOf(
@@ -115,8 +104,8 @@ internal fun ReceiptSettings() {
                 onClick = {
                     prefs
                         .edit()
-                        .putInt("receiptBackground", color)
-                        .putBoolean("receiptSync", false)
+                        .putInt(Prefs.RECEIPT_BACKGROUND, color)
+                        .putBoolean(Prefs.RECEIPT_SYNC, false)
                         .apply()
                 },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
@@ -129,9 +118,9 @@ internal fun ReceiptSettings() {
         onClick = {
             prefs
                 .edit()
-                .remove("receiptLayout")
-                .remove("receiptBackground")
-                .remove("receiptSync")
+                .remove(Prefs.RECEIPT_LAYOUT)
+                .remove(Prefs.RECEIPT_BACKGROUND)
+                .remove(Prefs.RECEIPT_SYNC)
                 .apply()
         }
     ) {

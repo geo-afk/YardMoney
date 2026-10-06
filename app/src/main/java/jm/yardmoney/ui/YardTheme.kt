@@ -15,34 +15,29 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import jm.yardmoney.Prefs
+import jm.yardmoney.appearancePrefs
 import jm.yardmoney.core.ColorContrast
-
-data class Appearance(
-    val mode: String = "System",
-    val dynamic: Boolean = false,
-    val accent: Int = 0xFF145D4D.toInt(),
-    val motion: MotionStyle = MotionStyle.Calm,
-    val corners: ControlCorners = ControlCorners.Soft,
-    val spacing: LayoutSpacing = LayoutSpacing.Comfortable,
-)
 
 private fun SharedPreferences.appearance() =
     Appearance(
-        getString("theme", "System") ?: "System",
-        getBoolean("dynamic", false),
-        getInt("accent", 0xFF145D4D.toInt()),
-        runCatching { MotionStyle.valueOf(getString("motion", "Calm") ?: "Calm") }
+        getString(Prefs.THEME, "System") ?: "System",
+        getBoolean(Prefs.DYNAMIC, false),
+        getInt(Prefs.ACCENT, 0xFF145D4D.toInt()),
+        runCatching { MotionStyle.valueOf(getString(Prefs.MOTION, "Calm") ?: "Calm") }
             .getOrDefault(MotionStyle.Calm),
-        runCatching { ControlCorners.valueOf(getString("corners", "Soft") ?: "Soft") }
+        runCatching { ControlCorners.valueOf(getString(Prefs.CORNERS, "Soft") ?: "Soft") }
             .getOrDefault(ControlCorners.Soft),
-        runCatching { LayoutSpacing.valueOf(getString("spacing", "Comfortable") ?: "Comfortable") }
+        runCatching {
+                LayoutSpacing.valueOf(getString(Prefs.SPACING, "Comfortable") ?: "Comfortable")
+            }
             .getOrDefault(LayoutSpacing.Comfortable),
     )
 
 @Composable
 internal fun rememberAppearance(): State<Appearance> {
     val context = LocalContext.current
-    val prefs = remember(context) { context.getSharedPreferences("appearance", 0) }
+    val prefs = remember(context) { context.appearancePrefs() }
     val state = remember(prefs) { mutableStateOf(prefs.appearance()) }
     DisposableEffect(prefs) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
@@ -187,27 +182,27 @@ internal fun YardTheme(content: @Composable () -> Unit) {
 @Composable
 internal fun AppearancePanel() {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("appearance", 0) }
+    val prefs = remember { context.appearancePrefs() }
     val appearance by rememberAppearance()
     Choice("Control corners", appearance.corners.name, ControlCorners.entries.map { it.name }) {
-        prefs.edit().putString("corners", it).apply()
+        prefs.edit().putString(Prefs.CORNERS, it).apply()
     }
     Choice("Layout spacing", appearance.spacing.name, LayoutSpacing.entries.map { it.name }) {
-        prefs.edit().putString("spacing", it).apply()
+        prefs.edit().putString(Prefs.SPACING, it).apply()
     }
     Text(
         "Soft uses gentle corners without pill-shaped buttons. Square is sharper; Rounded is softer. Compact reduces space between sections without shrinking touch targets.",
         style = MaterialTheme.typography.bodySmall,
     )
     Choice("Animation style", appearance.motion.name, MotionStyle.entries.map { it.name }) {
-        prefs.edit().putString("motion", it).apply()
+        prefs.edit().putString(Prefs.MOTION, it).apply()
     }
     Text(
         "Calm softly fades between menus. Slide adds a small upward glide, and Expressive adds a gentle zoom and smooths charts. Off switches views immediately. Android’s animation setting is respected.",
         style = MaterialTheme.typography.bodySmall,
     )
     Choice("Appearance", appearance.mode, listOf("System", "Light", "Dark", "AMOLED")) {
-        prefs.edit().putString("theme", it).apply()
+        prefs.edit().putString(Prefs.THEME, it).apply()
     }
     Text(
         "System follows your phone. AMOLED uses a true black page background.",
@@ -215,7 +210,7 @@ internal fun AppearancePanel() {
     )
     if (Build.VERSION.SDK_INT >= 31)
         Tick("Use Android wallpaper colors", appearance.dynamic) {
-            prefs.edit().putBoolean("dynamic", it).apply()
+            prefs.edit().putBoolean(Prefs.DYNAMIC, it).apply()
         }
     else
         Text(
@@ -238,8 +233,8 @@ internal fun AppearancePanel() {
     ) {
         prefs
             .edit()
-            .putInt("accent", accents.getValue(it).toInt())
-            .putBoolean("dynamic", false)
+            .putInt(Prefs.ACCENT, accents.getValue(it).toInt())
+            .putBoolean(Prefs.DYNAMIC, false)
             .apply()
     }
     var custom by
@@ -253,8 +248,8 @@ internal fun AppearancePanel() {
         onClick = {
             prefs
                 .edit()
-                .putInt("accent", (0xFF000000L or custom.drop(1).toLong(16)).toInt())
-                .putBoolean("dynamic", false)
+                .putInt(Prefs.ACCENT, (0xFF000000L or custom.drop(1).toLong(16)).toInt())
+                .putBoolean(Prefs.DYNAMIC, false)
                 .apply()
         },
         shape = MaterialTheme.shapes.small,

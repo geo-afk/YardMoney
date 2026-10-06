@@ -75,6 +75,9 @@ internal fun ReceiptCamera(onDismiss: () -> Unit, onPhoto: (Uri) -> Unit) {
     val view = remember { PreviewView(context) }
     var provider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
     LaunchedEffect(Unit) { if (!permission) request.launch(Manifest.permission.CAMERA) }
+    // Declared before the camera effect on purpose: effects are disposed in reverse order, so the
+    // camera is unbound first and no frame is posted to an executor that has already shut down.
+    DisposableEffect(Unit) { onDispose { analyzerExecutor.shutdown() } }
     DisposableEffect(permission) {
         var disposed = false
         if (permission) {
@@ -149,7 +152,6 @@ internal fun ReceiptCamera(onDismiss: () -> Unit, onPhoto: (Uri) -> Unit) {
             activeCamera = null
         }
     }
-    DisposableEffect(Unit) { onDispose { analyzerExecutor.shutdown() } }
     Dialog(
         onDismissRequest = { if (!taking) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false),

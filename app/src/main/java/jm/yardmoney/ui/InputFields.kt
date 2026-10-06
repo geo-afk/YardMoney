@@ -17,10 +17,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import jm.yardmoney.core.InputFormat
+import jm.yardmoney.data.jamaicaToday
 
 internal class CurrencyVisualTransformation(private val editing: Boolean) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
@@ -133,10 +133,11 @@ internal fun DateDropdown(
     label: String,
     value: String,
     optional: Boolean = false,
+    window: DateWindow = dateWindowFor(label),
     change: (String) -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val today = LocalDate.now(ZoneId.of("America/Jamaica"))
+    val today = jamaicaToday()
     val selected = runCatching { LocalDate.parse(value) }.getOrNull()
     val date = selected ?: today
     val display =
@@ -174,6 +175,8 @@ internal fun DateDropdown(
                             ?.toEpochMilli(),
                     initialDisplayedMonthMillis =
                         date.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
+                    // Days the repository would reject are greyed out instead of failing on save.
+                    selectableDates = remember(window, today) { WindowDates(window, today) },
                 )
             DatePickerDialog(
                 onDismissRequest = { expanded = false },
@@ -226,4 +229,18 @@ internal fun DateDropdown(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+private class WindowDates(private val window: DateWindow, private val today: LocalDate) :
+    SelectableDates {
+    override fun isSelectableDate(utcTimeMillis: Long) =
+        window.allows(
+            java.time.Instant.ofEpochMilli(utcTimeMillis)
+                .atZone(java.time.ZoneOffset.UTC)
+                .toLocalDate(),
+            today,
+        )
+
+    override fun isSelectableYear(year: Int) = window.allowsYear(year, today)
 }

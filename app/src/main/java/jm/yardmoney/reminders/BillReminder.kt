@@ -11,15 +11,18 @@ import androidx.core.content.ContextCompat
 import androidx.work.*
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
+import jm.yardmoney.Prefs
 import jm.yardmoney.R
 import jm.yardmoney.YardMoneyApplication
+import jm.yardmoney.appearancePrefs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 
 class BillReminder(context: Context, parameters: WorkerParameters) :
     CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result {
-        val prefs = applicationContext.getSharedPreferences("appearance", 0)
-        if (!prefs.getBoolean("reminders", false)) return Result.success()
+        val prefs = applicationContext.appearancePrefs()
+        if (!prefs.getBoolean(Prefs.REMINDERS, false)) return Result.success()
         if (
             android.os.Build.VERSION.SDK_INT >= 33 &&
                 ContextCompat.checkSelfPermission(
@@ -39,7 +42,7 @@ class BillReminder(context: Context, parameters: WorkerParameters) :
                         } == true
                 }
             val day = app.repository.today.toString()
-            if (due && prefs.getString("reminder_day", null) != day) {
+            if (due && prefs.getString(Prefs.REMINDER_DAY, null) != day) {
                 applicationContext
                     .getSystemService(NotificationManager::class.java)
                     .createNotificationChannel(
@@ -64,7 +67,7 @@ class BillReminder(context: Context, parameters: WorkerParameters) :
                     .notify(
                         2001,
                         NotificationCompat.Builder(applicationContext, "bills")
-                            .setSmallIcon(R.drawable.ic_launcher)
+                            .setSmallIcon(R.drawable.ic_stat_bills)
                             .setContentTitle("Check your payday plan")
                             .setContentText("You have upcoming or overdue bills to review.")
                             .setContentIntent(intent)
@@ -72,21 +75,21 @@ class BillReminder(context: Context, parameters: WorkerParameters) :
                             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                             .build(),
                     )
-                prefs.edit().putString("reminder_day", day).apply()
+                prefs.edit().putString(Prefs.REMINDER_DAY, day).apply()
             }
             Result.success()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Result.retry()
+            // Transient problems (a locked database) get a few retries; after that, wait for the
+            // next daily run instead of retrying forever.
+            if (runAttemptCount < 3) Result.retry() else Result.failure()
         }
     }
 
     companion object {
         fun setEnabled(context: Context, enabled: Boolean) {
-            context
-                .getSharedPreferences("appearance", 0)
-                .edit()
-                .putBoolean("reminders", enabled)
-                .apply()
+            context.appearancePrefs().edit().putBoolean(Prefs.REMINDERS, enabled).apply()
             val manager = WorkManager.getInstance(context)
             if (enabled)
                 manager.enqueueUniquePeriodicWork(

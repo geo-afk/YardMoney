@@ -3,10 +3,6 @@ package jm.yardmoney.receipts
 import android.graphics.*
 import kotlin.math.*
 
-data class ReceiptQuality(val brightness: Double, val sharpness: Double, val warnings: List<String>)
-
-data class ReceiptBoundary(val corners: FloatArray, val confidence: Double)
-
 /** Conservative bright-paper detector. Ambiguous scenes keep the full image for manual cropping. */
 object ReceiptPreprocessor {
     fun quality(source: Bitmap): ReceiptQuality {

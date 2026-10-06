@@ -4,88 +4,27 @@ import androidx.room.withTransaction
 import java.math.BigDecimal
 import java.security.MessageDigest
 import java.time.LocalDate
-import java.time.ZoneId
 import java.util.UUID
 import jm.yardmoney.core.*
 import kotlinx.coroutines.flow.*
 
-data class LedgerState(
-    val profile: Profile?,
-    val accounts: List<AccountBalance>,
-    val transactions: List<MoneyTransaction>,
-    val commitments: List<CommitmentBalance>,
-    val goals: List<GoalBalance>,
-)
-
-data class ReceiptState(
-    val drafts: List<ReceiptDraft>,
-    val receipts: List<Receipt>,
-    val prices: List<PriceObservation>,
-)
-
-data class ShoppingState(val lists: List<ShoppingList>, val items: List<ShoppingItem>)
-
-data class FinanceSnapshot(
-    val ledger: LedgerState,
-    val receipt: ReceiptState,
-    val shopping: ShoppingState,
-    val splits: List<TransactionSplit>,
-    val limits: List<CategoryLimit>,
-    val accountEntries: List<AccountEntry> = emptyList(),
-    val contributions: List<GoalContribution> = emptyList(),
-    val receiptItems: List<ReceiptItem> = emptyList(),
-    val savingsAccountIds: Set<String>? = null,
-)
-
-data class TransactionInput(
-    val key: String,
-    val kind: String,
-    val amountMinor: Long,
-    val date: LocalDate,
-    val description: String,
-    val category: String,
-    val bucket: String,
-    val accountId: String,
-    val toAccountId: String? = null,
-    val commitmentId: String? = null,
-    val goalId: String? = null,
-    val refundOfId: String? = null,
-    val splits: List<Pair<String, Long>> = emptyList(),
-)
-
-data class ConfirmedItem(
-    val raw: String,
-    val name: String,
-    val quantity: String,
-    val totalMinor: Long,
-    val size: String,
-    val unit: String,
-    val verified: Boolean,
-)
-
-data class ConfirmedReceipt(
-    val draftId: String,
-    val merchant: String,
-    val branch: String,
-    val parish: String,
-    val date: LocalDate,
-    val totalMinor: Long,
-    val adjustmentMinor: Long,
-    val items: List<ConfirmedItem>,
-    val accountId: String,
-    val submissionKey: String,
-    val totalOnly: Boolean,
-    val allowDuplicate: Boolean = false,
-    val existingTransactionId: String? = null,
-    val metadata: Map<String, String> = emptyMap(),
-)
-
 class FinanceRepository(private val db: YardDatabase) {
     val dao = db.finance()
     val today
-        get() = LocalDate.now(ZoneId.of("America/Jamaica"))
+        get() = jamaicaToday()
 
-    val snapshot: Flow<FinanceSnapshot> =
+    // Shopping edits (a checkbox tap) are frequent and independent of the ledger, so they are
+    // read on their own instead of reloading every table. conflate(): when writes arrive faster
+    // than a read finishes, only the newest state is read.
+    private val shoppingState: Flow<ShoppingState> =
+        db.invalidationTracker
+            .createFlow("shopping_lists", "shopping_items")
+            .conflate()
+            .map {
+                db.withTransaction { ShoppingState(dao.readLists(), dao.readShoppingItems()) }
+            }
+
+    private val ledgerSnapshot: Flow<FinanceSnapshot> =
         db.invalidationTracker
             .createFlow(
                 "profile",
@@ -101,11 +40,10 @@ class FinanceRepository(private val db: YardDatabase) {
                 "receipts",
                 "receipt_items",
                 "price_observations",
-                "shopping_lists",
-                "shopping_items",
                 "bill_templates",
                 "category_limits",
             )
+            .conflate()
             .map {
                 // One committed revision prevents a payment from briefly being counted twice in the
                 // UI.
@@ -119,7 +57,7 @@ class FinanceRepository(private val db: YardDatabase) {
                             dao.readGoals(),
                         ),
                         ReceiptState(dao.readDrafts(), dao.readReceipts(), dao.readPrices()),
-                        ShoppingState(dao.readLists(), dao.readShoppingItems()),
+                        ShoppingState(emptyList(), emptyList()), // replaced by shoppingState below
                         dao.readSplits(),
                         dao.readCategoryLimits(),
                         dao.readEntries(),
@@ -129,24 +67,34 @@ class FinanceRepository(private val db: YardDatabase) {
                 }
             }
 
+    val snapshot: Flow<FinanceSnapshot> =
+        combine(ledgerSnapshot, shoppingState) { ledger: FinanceSnapshot, shopping: ShoppingState ->
+            ledger.copy(shopping = shopping)
+        }
+
     suspend fun onboard(profile: Profile, openingMinor: Long) = db.withTransaction {
         require(dao.getProfile() == null) { "Setup is already complete." }
         validateProfile(profile)
-        require(openingMinor in 0..Money.MAX_MINOR)
+        require(openingMinor in 0..Money.MAX_MINOR) { "Enter your starting cash as zero or more." }
         dao.put(profile)
         dao.insert(Account(id(), "Cash", "CASH", openingMinor, true))
     }
 
     private fun validateProfile(p: Profile) {
-        require(p.typicalNetMinor in 0..Money.MAX_MINOR)
+        require(p.typicalNetMinor in 0..Money.MAX_MINOR) {
+            "Enter your typical take-home pay as zero or more."
+        }
         BudgetSplit(p.needsBp, p.wantsBp, p.savingsBp)
         require(LocalDate.parse(p.nextPayday) in today..today.plusYears(5)) {
             "Choose a planning payday within the next five years."
         }
         LocalDate.parse(p.periodStart)
         PayFrequency.valueOf(p.frequency)
-        require(p.anchorDay in 1..31 && p.secondDay in 1..31)
-        if (p.frequency == "TWICE_MONTHLY") require(p.anchorDay < p.secondDay)
+        require(p.anchorDay in 1..31 && p.secondDay in 1..31) {
+            "Pay days must be between 1 and 31."
+        }
+        if (p.frequency == "TWICE_MONTHLY")
+            require(p.anchorDay < p.secondDay) { "The second pay day must come after the first." }
     }
 
     suspend fun updateSplit(split: BudgetSplit) {
@@ -174,8 +122,8 @@ class FinanceRepository(private val db: YardDatabase) {
     }
 
     suspend fun addAccount(name: String, kind: String, opening: Long, included: Boolean) {
-        require(name.isNotBlank())
-        require(opening in -Money.MAX_MINOR..Money.MAX_MINOR)
+        require(name.isNotBlank()) { "Enter an account name." }
+        require(opening in -Money.MAX_MINOR..Money.MAX_MINOR) { "Enter a smaller opening balance." }
         require(kind in setOf("CASH", "CURRENT", "SAVINGS", "WALLET"))
         require(dao.accountCount() < 1000) { "The pilot supports up to 1,000 accounts." }
         dao.insert(Account(id(), name.trim().take(100), kind, opening, included))
@@ -188,8 +136,10 @@ class FinanceRepository(private val db: YardDatabase) {
             return it.id
         }
         require(i.kind in setOf("EXPENSE", "INCOME", "TRANSFER", "REFUND", "ADJUSTMENT"))
-        require(i.amountMinor in -Money.MAX_MINOR..Money.MAX_MINOR && i.amountMinor != 0L)
-        if (i.kind != "ADJUSTMENT") require(i.amountMinor > 0)
+        require(i.amountMinor in -Money.MAX_MINOR..Money.MAX_MINOR && i.amountMinor != 0L) {
+            "Enter an amount that is not zero and not too large."
+        }
+        if (i.kind != "ADJUSTMENT") require(i.amountMinor > 0) { "Enter an amount above zero." }
         require(dao.account(i.accountId) != null) { "Choose a valid account." }
         require(i.bucket in setOf("NEEDS", "WANTS", "SAVINGS"))
         require(i.date <= today) {
@@ -197,12 +147,14 @@ class FinanceRepository(private val db: YardDatabase) {
         }
         val transfer = i.kind == "TRANSFER"
         if (transfer) {
-            require(i.toAccountId != null && i.toAccountId != i.accountId)
-            require(dao.account(i.toAccountId) != null)
+            require(i.toAccountId != null && i.toAccountId != i.accountId) {
+                "Choose a different account to transfer to."
+            }
+            require(dao.account(i.toAccountId) != null) { "Choose a valid account to transfer to." }
         }
         if (i.kind == "REFUND" && i.refundOfId != null) {
             val original = dao.transaction(i.refundOfId) ?: error("Original expense not found.")
-            require(original.kind == "EXPENSE")
+            require(original.kind == "EXPENSE") { "A refund must refer to an expense." }
             require(i.bucket == original.bucket) { "Use the original expense's budget group." }
             require(i.amountMinor <= original.amountMinor - dao.refunded(original.id)) {
                 "Refunds cannot exceed the original expense."
@@ -316,7 +268,9 @@ class FinanceRepository(private val db: YardDatabase) {
         require(submissionKey.isNotBlank() && submissionKey.length <= 120)
         if (dao.commitment(submissionKey) != null || dao.template(submissionKey) != null)
             return@withTransaction
-        require(name.isNotBlank() && amount in 1..Money.MAX_MINOR)
+        require(name.isNotBlank() && amount in 1..Money.MAX_MINOR) {
+            "Enter a name and an amount above zero."
+        }
         require(kind in setOf("BILL", "SAVINGS", "DEBT", "RESERVE"))
         if (frequency == "ONCE")
             dao.insert(
@@ -357,12 +311,15 @@ class FinanceRepository(private val db: YardDatabase) {
         val horizon = maxOf(today.plusMonths(2), LocalDate.parse(p.nextPayday))
         require(horizon <= today.plusYears(5))
         dao.templates().forEach { template ->
+            // One lookup per series instead of one query per occurrence: a weekly bill started
+            // years ago would otherwise cost hundreds of queries on every launch.
+            val existing = dao.occurrenceKeys("${template.id}@%").toHashSet()
             var date = LocalDate.parse(template.firstDate)
             var count = 0
             while (date <= horizon || count == 0) {
                 require(count++ < 3000)
                 val occurrence = "${template.id}@$date"
-                if (dao.occurrenceCount(occurrence) == 0)
+                if (existing.add(occurrence))
                     dao.insert(
                         Commitment(
                             id(),
@@ -395,7 +352,7 @@ class FinanceRepository(private val db: YardDatabase) {
         require(name.isNotBlank() && amount in 1..Money.MAX_MINOR && amount >= dao.settled(id)) {
             "Amount cannot be below payments already made."
         }
-        require(accountId == null || dao.account(accountId) != null)
+        require(accountId == null || dao.account(accountId) != null) { "Choose a valid account." }
         dao.update(
             c.copy(
                 name = name.trim(),
@@ -467,7 +424,9 @@ class FinanceRepository(private val db: YardDatabase) {
             return@withTransaction it.id
         }
         val draft = dao.draft(r.draftId) ?: error("Draft no longer exists.")
-        require(r.merchant.isNotBlank() && r.totalMinor in 1..Money.MAX_MINOR)
+        require(r.merchant.isNotBlank() && r.totalMinor in 1..Money.MAX_MINOR) {
+            "Enter the store name and a total above zero."
+        }
         require(r.date <= today) { "A purchase date cannot be in the future." }
         if (!r.allowDuplicate)
             require(duplicates(r).isEmpty()) {
@@ -607,7 +566,7 @@ class FinanceRepository(private val db: YardDatabase) {
     }
 
     suspend fun createList(name: String) {
-        require(name.isNotBlank())
+        require(name.isNotBlank()) { "Enter a list name." }
         dao.insert(ShoppingList(id(), name.trim().take(120), today.toString()))
     }
 
@@ -619,9 +578,9 @@ class FinanceRepository(private val db: YardDatabase) {
         manual: Long?,
         optional: Boolean,
     ) {
-        require(name.isNotBlank())
+        require(name.isNotBlank()) { "Enter an item name." }
         Quantity.parse(quantity)
-        require(manual == null || manual in 1..Money.MAX_MINOR)
+        require(manual == null || manual in 1..Money.MAX_MINOR) { "Enter a price above zero." }
         manual?.let { Quantity.estimate(it, quantity) }
         dao.put(ShoppingItem(id(), listId, name.trim().take(120), quantity, key, manual, optional))
     }
@@ -637,10 +596,18 @@ class FinanceRepository(private val db: YardDatabase) {
         require(items.isNotEmpty()) { "Add at least one item." }
         require(items.map { it.id }.distinct().size == items.size)
         items.forEach {
-            require(it.listId == list.id && it.name.trim().length in 1..120)
-            require(it.category.isNotBlank() && it.category.length <= 120 && it.note.length <= 500)
+            require(it.listId == list.id && it.name.trim().length in 1..120) {
+                "Each item needs a name of up to 120 characters."
+            }
+            require(
+                it.category.isNotBlank() && it.category.length <= 120 && it.note.length <= 500
+            ) {
+                "Each item needs a category and a note under 500 characters."
+            }
             Quantity.parse(it.quantity)
-            require(it.manualPriceMinor == null || it.manualPriceMinor in 0..Money.MAX_MINOR)
+            require(it.manualPriceMinor == null || it.manualPriceMinor in 0..Money.MAX_MINOR) {
+                "Enter a price of zero or more."
+            }
             it.manualPriceMinor?.let { price -> Quantity.estimate(price, it.quantity) }
         }
         Money.sum(
@@ -678,7 +645,7 @@ class FinanceRepository(private val db: YardDatabase) {
         accountId: String? = null,
         originalId: String? = null,
     ) = db.withTransaction {
-        require(accountId == null || dao.account(accountId) != null)
+        require(accountId == null || dao.account(accountId) != null) { "Choose a valid account." }
         require(
             category.isNotBlank() &&
                 bucket in setOf("NEEDS", "WANTS", "SAVINGS") &&
@@ -699,7 +666,7 @@ class FinanceRepository(private val db: YardDatabase) {
 
     suspend fun editAccount(id: String, name: String, included: Boolean) {
         val account = dao.account(id) ?: error("Account not found.")
-        require(name.isNotBlank())
+        require(name.isNotBlank()) { "Enter an account name." }
         dao.update(account.copy(name = name.trim().take(100), included = included))
     }
 

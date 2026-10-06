@@ -4,6 +4,8 @@ import java.text.Normalizer
 import java.util.Locale
 import jm.yardmoney.core.*
 import jm.yardmoney.data.*
+import org.json.JSONArray
+import org.json.JSONObject
 
 private val shopNameSeparator = Regex("[^\\p{L}\\p{N}]+")
 
@@ -214,3 +216,72 @@ internal fun groceryBudgetRemaining(data: FinanceSnapshot, today: String): Long?
 }
 
 internal fun shopCount(count: Int, noun: String) = "$count $noun${if(count == 1) "" else "s"}"
+
+internal data class ShopDraft(
+    val list: ShoppingList,
+    val items: List<ShoppingItem>,
+    val replacing: Boolean = false,
+) {
+    fun encode(): String =
+        JSONObject()
+            .put("id", list.id)
+            .put("name", list.name)
+            .put("date", list.createdDate ?: JSONObject.NULL)
+            .put("replacing", replacing)
+            .put(
+                "items",
+                JSONArray().apply {
+                    items.forEach { item ->
+                        put(
+                            JSONObject()
+                                .put("id", item.id)
+                                .put("name", item.name)
+                                .put("quantity", item.quantity)
+                                .put("key", item.productKey ?: JSONObject.NULL)
+                                .put("price", item.manualPriceMinor ?: JSONObject.NULL)
+                                .put("optional", item.optional)
+                                .put("checked", item.checked)
+                                .put("category", item.category)
+                                .put("note", item.note)
+                        )
+                    }
+                },
+            )
+            .toString()
+
+    companion object {
+        fun decode(json: String): ShopDraft? =
+            if (json.isBlank()) null
+            else
+                runCatching {
+                    val root = JSONObject(json)
+                    val list =
+                        ShoppingList(
+                            root.getString("id"),
+                            root.getString("name"),
+                            if (root.isNull("date")) null else root.getString("date"),
+                        )
+                    val rows = root.getJSONArray("items")
+                    ShopDraft(
+                        list,
+                        (0 until rows.length()).map { i ->
+                            val r = rows.getJSONObject(i)
+                            ShoppingItem(
+                                r.getString("id"),
+                                list.id,
+                                r.getString("name"),
+                                r.getString("quantity"),
+                                if (r.isNull("key")) null else r.getString("key"),
+                                if (r.isNull("price")) null else r.getLong("price"),
+                                r.getBoolean("optional"),
+                                r.getBoolean("checked"),
+                                r.getString("category"),
+                                r.getString("note"),
+                            )
+                        },
+                        root.getBoolean("replacing"),
+                    )
+                }
+                    .getOrNull()
+    }
+}

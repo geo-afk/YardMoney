@@ -13,14 +13,6 @@ import jm.yardmoney.core.Money
 import jm.yardmoney.data.Commitment
 import jm.yardmoney.data.CommitmentBalance
 
-internal data class ReservationGroup(val key: String, val occurrences: List<CommitmentBalance>) {
-    val primary: CommitmentBalance
-        get() = occurrences.firstOrNull { it.remainingMinor > 0 } ?: occurrences.last()
-
-    val recurring: Boolean
-        get() = key.startsWith("series:")
-}
-
 internal fun reservationGroups(rows: List<CommitmentBalance>): List<ReservationGroup> =
     rows
         .groupBy {
