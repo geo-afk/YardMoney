@@ -33,12 +33,9 @@ class AccessibilityQualityTest {
         // A full suite can launch this host before its window receives focus from the previous
         // test.
         compose.waitUntil(10000) { compose.activity.hasWindowFocus() }
-        // Establish only the starting target, then exercise real D-pad and keyboard events.
-        compose.onNodeWithContentDescription("Home").performSemanticsAction(
-            androidx.compose.ui.semantics.SemanticsActions.RequestFocus
-        ) {
-            it()
-        }
+        // A selectable tab is focusable in keyboard mode. Enter through a real Tab key,
+        // rather than requesting focus while Android is still in touch mode after another test.
+        compose.onRoot().performKeyInput { pressKey(Key.Tab) }
         compose.onNodeWithContentDescription("Home").assertIsFocused()
         compose.onNodeWithContentDescription("Home").performKeyInput {
             pressKey(Key.DirectionRight)
