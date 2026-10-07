@@ -81,9 +81,58 @@ class FinanceRepository(private val db: YardDatabase) {
     suspend fun categorySuggestion(merchant: String, accountId: String?) =
         CategoryRuleMatcher.match(merchant, accountId, dao.readCategoryRules().map { it.suggestion() })
 
+    private val imports = db.invalidationTracker.createFlow("import_batches", "import_mappings", "import_records")
+        .conflate().map { db.withTransaction { ImportState(dao.readImportBatches(), dao.readImportMappings()) } }
+
+    /** A single transaction: mapping, provenance, entries and splits commit together. */
+    suspend fun importStatement(batchId: String, accountId: String, mapping: StatementMapping,
+        rows: List<StatementRow>, allowDuplicates: Boolean = false, progress: (Int, Int) -> Unit = { _, _ -> }): Int = db.withTransaction {
+        StatementCsv.validateMapping(mapping)
+        require(batchId.matches(Regex("[a-f0-9]{64}"))) { "Choose a valid statement batch." }
+        require(dao.account(accountId) != null) { "Choose a valid account." }
+        require(rows.size in 1..StatementCsv.MAX_ROWS && rows.all { it.issues.isEmpty() && it.date != null && it.signedMinor != null }) {
+            "Select valid statement rows before importing."
+        }
+        if (dao.importBatch(batchId) != null) return@withTransaction 0
+        val entries = dao.readEntries().groupBy { it.transactionId }
+        val known = dao.readTransactions().filter { it.kind in listOf("EXPENSE", "INCOME") }.flatMap { tx ->
+            entries[tx.id].orEmpty().filter { it.accountId == accountId }.map {
+                StatementCsv.fingerprint(accountId, LocalDate.parse(tx.date), it.signedMinor, tx.description)
+            }
+        }.toMutableSet()
+        val rules = dao.readCategoryRules().map { it.suggestion() }
+        dao.insert(ImportBatch(batchId, accountId, System.currentTimeMillis(), rows.size))
+        dao.put(mapping.persisted(accountId))
+        var count = 0
+        rows.forEachIndexed { index, row ->
+            val date = requireNotNull(row.date)
+            val signed = requireNotNull(row.signedMinor)
+            require(row.hash.matches(Regex("[a-f0-9]{64}")) && signed != 0L) { "Check the statement row." }
+            val duplicate = !known.add(StatementCsv.fingerprint(accountId, date, signed, row.description))
+            if (!duplicate || allowDuplicates) {
+                val rule = CategoryRuleMatcher.match(row.description, accountId, rules)
+                val id = postInside(TransactionInput("import:$batchId:${row.hash}", if (signed < 0) "EXPENSE" else "INCOME",
+                    kotlin.math.abs(signed), date, row.description, rule?.category ?: "Other", rule?.bucket ?: "NEEDS", accountId))
+                dao.insert(ImportRecord(id, batchId, row.hash))
+                count++
+            }
+            progress(index + 1, rows.size)
+        }
+        // A zero-row batch is still recorded, making a retry idempotent.
+        count
+    }
+
+    suspend fun undoStatementImport(batchId: String) = db.withTransaction {
+        val records = dao.importRecords(batchId)
+        require(records.none { dao.refundCount(it.transactionId) > 0 }) { "Remove linked refunds before undoing this import." }
+        require(records.none { dao.transactionReceipts(it.transactionId).isNotEmpty() }) { "Remove linked receipts before undoing this import." }
+        records.forEach { dao.deleteTransaction(it.transactionId) }
+        dao.deleteImportBatch(batchId)
+    }
+
     val snapshot: Flow<FinanceSnapshot> =
-        combine(ledgerSnapshot, shoppingState, categoryRules) { ledger, shopping, rules ->
-            ledger.copy(shopping = shopping, categoryRules = rules)
+        combine(ledgerSnapshot, shoppingState, categoryRules, imports) { ledger, shopping, rules, importState ->
+            ledger.copy(shopping = shopping, categoryRules = rules, imports = importState)
         }
 
     suspend fun onboard(profile: Profile, openingMinor: Long) = db.withTransaction {

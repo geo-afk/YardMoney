@@ -31,6 +31,9 @@ class PortableBackup(private val app: YardMoneyApplication) {
             "shopping_lists",
             "shopping_items",
             "category_rules",
+            "import_batches",
+            "import_records",
+            "import_mappings",
         )
 
     suspend fun export(password: CharArray): ByteArray =
@@ -45,7 +48,7 @@ class PortableBackup(private val app: YardMoneyApplication) {
         require(password.size >= 12) { "Use a backup password of at least 12 characters." }
         val root =
             app.database.withTransaction {
-                val json = JSONObject().put("version", 4)
+                val json = JSONObject().put("version", 5)
                 val images = JSONObject()
                 var used = 0L
                 tables.forEach { table ->
@@ -112,14 +115,16 @@ class PortableBackup(private val app: YardMoneyApplication) {
                 clear.fill(0)
             }
         val version = root.getInt("version")
-        require(version in 1..4) { "Unsupported backup version." }
-        val expectedTables = if (version < 4) tables - "category_rules" else tables
+        require(version in 1..5) { "Unsupported backup version." }
+        val expectedTables = tables.filterNot { (version < 4 && it == "category_rules") ||
+            (version < 5 && it in listOf("import_batches", "import_records", "import_mappings")) }
         require(
             root.keys().asSequence().toSet() == (expectedTables + listOf("version", "images")).toSet()
         ) {
             "Unexpected backup content."
         }
         if (version < 4) root.put("category_rules", JSONArray())
+        if (version < 5) listOf("import_batches", "import_records", "import_mappings").forEach { root.put(it, JSONArray()) }
         val images = root.getJSONObject("images")
         try {
             images.keys().forEach { ref ->
@@ -205,6 +210,15 @@ class PortableBackup(private val app: YardMoneyApplication) {
                         .use {
                             require(!it.moveToFirst()) { "Invalid plan account." }
                         }
+                }
+                sql.query("SELECT id FROM import_batches WHERE rowCount<0 OR rowCount>20000 OR createdAt<0 OR length(id)<>64").use {
+                    require(!it.moveToFirst()) { "Invalid import batch." }
+                }
+                sql.query("SELECT accountId FROM import_mappings WHERE dateColumn<0 OR descriptionColumn<0 OR dateColumn>127 OR descriptionColumn>127 OR amountColumn>127 OR debitColumn>127 OR creditColumn>127 OR balanceColumn>127 OR amountColumn< -1 OR debitColumn< -1 OR creditColumn< -1 OR balanceColumn< -1 OR header NOT IN (0,1) OR dateFormat NOT IN ('dd/MM/yyyy','MM/dd/yyyy','yyyy-MM-dd')").use {
+                    require(!it.moveToFirst()) { "Invalid statement column mapping." }
+                }
+                sql.query("SELECT transactionId FROM import_records WHERE length(rowHash)<>64").use {
+                    require(!it.moveToFirst()) { "Invalid import row." }
                 }
                 sql.query("PRAGMA foreign_key_check").use {
                     require(!it.moveToFirst()) { "Backup relationships are invalid." }

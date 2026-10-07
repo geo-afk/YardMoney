@@ -63,7 +63,7 @@ class AccountMigrationTest {
         }
         val db =
             Room.databaseBuilder(context, YardDatabase::class.java, name)
-                .addMigrations(YardDatabase.MIGRATION_1_2, YardDatabase.MIGRATION_2_3, YardDatabase.MIGRATION_3_4)
+                .addMigrations(YardDatabase.MIGRATION_1_2, YardDatabase.MIGRATION_2_3, YardDatabase.MIGRATION_3_4, YardDatabase.MIGRATION_4_5)
                 .build()
         try {
             val repo = FinanceRepository(db)

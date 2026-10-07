@@ -31,6 +31,7 @@ data class FinanceSnapshot(
     val receiptItems: List<ReceiptItem> = emptyList(),
     val savingsAccountIds: Set<String>? = null,
     val categoryRules: List<CategoryRule> = emptyList(),
+    val imports: ImportState = ImportState(emptyList(), emptyList()),
 )
 
 data class TransactionInput(

@@ -179,6 +179,7 @@ internal fun SettingsPage(model: AppModel, data: FinanceSnapshot, open: (String)
             { toggle("Backup & data") },
         ) {
             BackupPanel(model)
+            OutlinedButton(onClick = { open("statementImport") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Import transactions") }
             DataControls(model)
         }
         SettingsGroup(

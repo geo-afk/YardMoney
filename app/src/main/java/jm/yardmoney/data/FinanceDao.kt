@@ -5,6 +5,15 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FinanceDao {
+    @Query("SELECT * FROM import_batches ORDER BY createdAt DESC") suspend fun readImportBatches(): List<ImportBatch>
+    @Query("SELECT * FROM import_mappings") suspend fun readImportMappings(): List<ImportMapping>
+    @Query("SELECT * FROM import_batches WHERE id=:id") suspend fun importBatch(id: String): ImportBatch?
+    @Query("SELECT * FROM import_records WHERE batchId=:id") suspend fun importRecords(id: String): List<ImportRecord>
+    @Query("DELETE FROM import_batches WHERE id=:id") suspend fun deleteImportBatch(id: String)
+    @Insert suspend fun insert(batch: ImportBatch)
+    @Insert suspend fun insert(record: ImportRecord)
+    @Upsert suspend fun put(mapping: ImportMapping)
+
     @Query("SELECT * FROM category_rules ORDER BY createdAt DESC, id")
     suspend fun readCategoryRules(): List<CategoryRule>
 

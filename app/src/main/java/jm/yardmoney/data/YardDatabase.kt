@@ -24,14 +24,27 @@ import androidx.room.RoomDatabase
             BillTemplate::class,
             CategoryLimit::class,
             CategoryRule::class,
+            ImportBatch::class,
+            ImportRecord::class,
+            ImportMapping::class,
         ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class YardDatabase : RoomDatabase() {
     abstract fun finance(): FinanceDao
 
     companion object {
+        val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS import_batches (id TEXT NOT NULL, accountId TEXT NOT NULL, createdAt INTEGER NOT NULL, rowCount INTEGER NOT NULL, PRIMARY KEY(id), FOREIGN KEY(accountId) REFERENCES accounts(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_import_batches_accountId ON import_batches(accountId)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS import_records (transactionId TEXT NOT NULL, batchId TEXT NOT NULL, rowHash TEXT NOT NULL, PRIMARY KEY(transactionId), FOREIGN KEY(batchId) REFERENCES import_batches(id) ON UPDATE NO ACTION ON DELETE CASCADE, FOREIGN KEY(transactionId) REFERENCES transactions(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_import_records_batchId_rowHash ON import_records(batchId,rowHash)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS import_mappings (accountId TEXT NOT NULL, dateColumn INTEGER NOT NULL, descriptionColumn INTEGER NOT NULL, amountColumn INTEGER NOT NULL, debitColumn INTEGER NOT NULL, creditColumn INTEGER NOT NULL, balanceColumn INTEGER NOT NULL, dateFormat TEXT NOT NULL, header INTEGER NOT NULL, PRIMARY KEY(accountId), FOREIGN KEY(accountId) REFERENCES accounts(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+            }
+        }
+
         val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS category_rules (id TEXT NOT NULL, pattern TEXT NOT NULL, matchType TEXT NOT NULL, category TEXT NOT NULL, bucket TEXT NOT NULL, accountId TEXT, createdAt INTEGER NOT NULL, PRIMARY KEY(id), FOREIGN KEY(accountId) REFERENCES accounts(id) ON UPDATE NO ACTION ON DELETE CASCADE)")

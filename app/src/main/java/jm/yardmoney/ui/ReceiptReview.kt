@@ -567,20 +567,20 @@ internal fun ReceiptReview(
 }
 
 @Composable
-internal fun Tick(label: String, value: Boolean, change: (Boolean) -> Unit) {
+internal fun Tick(label: String, value: Boolean, enabled: Boolean = true, change: (Boolean) -> Unit) {
     Row(
         modifier =
             Modifier.fillMaxWidth()
                 .heightIn(min = 48.dp)
                 .toggleable(
                     value = value,
-                    enabled = !LocalSaving.current,
+                    enabled = enabled && !LocalSaving.current,
                     role = Role.Checkbox,
                     onValueChange = change,
                 ),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
-        Checkbox(value, null, enabled = !LocalSaving.current)
+        Checkbox(value, null, enabled = enabled && !LocalSaving.current)
         Spacer(Modifier.width(12.dp))
         Text(label, modifier = Modifier.weight(1f))
     }

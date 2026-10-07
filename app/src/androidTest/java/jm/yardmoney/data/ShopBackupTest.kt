@@ -69,10 +69,11 @@ class ShopBackupTest {
                 } finally {
                     clear.fill(0)
                 }
-            assertEquals(4, json.getInt("version"))
+            assertEquals(5, json.getInt("version"))
             assertEquals(0, json.getJSONObject("images").length())
             json.put("version", 2)
             json.remove("category_rules")
+            listOf("import_batches", "import_records", "import_mappings").forEach { json.remove(it) }
             val lists = json.getJSONArray("shopping_lists")
             for (i in 0 until lists.length()) lists.getJSONObject(i).remove("createdDate")
             val items = json.getJSONArray("shopping_items")

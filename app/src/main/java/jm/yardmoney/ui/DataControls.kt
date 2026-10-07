@@ -98,7 +98,7 @@ internal fun DataControls(model: AppModel) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        "This deletes your accounts, transactions, budgets, category rules, bills, goals, shopping lists, receipts and price history on this device. Backups you saved elsewhere remain. Save an encrypted backup first if you want to restore them."
+                        "This deletes your accounts, transactions, budgets, category rules, statement imports and mappings, bills, goals, shopping lists, receipts and price history on this device. Backups you saved elsewhere remain. Save an encrypted backup first if you want to restore them."
                     )
                     Field("Type DELETE to confirm", confirm) { confirm = it }
                 }

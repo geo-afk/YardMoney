@@ -292,6 +292,7 @@ private fun MainPages(
                             quickDraftValues = null
                             form = route
                         }
+                        route == "statementImport" -> { statementUri = null; form = route }
                         else -> form = route
                     }
                 }
@@ -344,6 +345,8 @@ private fun MainPages(
                     form = "transaction"
                 }
             }, saveRule = ::saveMerchantRule)
+
+    if (form == "statementImport") StatementImportSheet(model, data, statementUri, busy) { statementUri = null; form = null }
 
     if (form == "paste") AlertCaptureSheet(alertText, data, today, close = { form = null }) { kind, draft ->
         quickDraftValues = draft.savedValues()

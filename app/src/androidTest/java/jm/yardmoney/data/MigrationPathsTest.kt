@@ -16,7 +16,7 @@ class MigrationPathsTest {
     @Test
     fun eachUpgradePathPreservesLinkedFinancialAndReceiptRecords() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        for ((from, to) in listOf(1 to 2, 1 to 3, 2 to 3, 1 to 4, 2 to 4, 3 to 4)) {
+        for ((from, to) in listOf(1 to 2, 1 to 3, 2 to 3, 1 to 4, 2 to 4, 3 to 4, 1 to 5, 2 to 5, 3 to 5, 4 to 5)) {
             val name = "quality-migration-$from-$to-${System.nanoTime()}"
             try {
                 helper.createDatabase(name, from).use { db ->
@@ -48,9 +48,10 @@ class MigrationPathsTest {
                 }
                 val migrations =
                     when (from) {
-                        1 -> arrayOf(YardDatabase.MIGRATION_1_2, YardDatabase.MIGRATION_2_3, YardDatabase.MIGRATION_3_4)
-                        2 -> arrayOf(YardDatabase.MIGRATION_2_3, YardDatabase.MIGRATION_3_4)
-                        else -> arrayOf(YardDatabase.MIGRATION_3_4)
+                        1 -> arrayOf(YardDatabase.MIGRATION_1_2, YardDatabase.MIGRATION_2_3, YardDatabase.MIGRATION_3_4, YardDatabase.MIGRATION_4_5)
+                        2 -> arrayOf(YardDatabase.MIGRATION_2_3, YardDatabase.MIGRATION_3_4, YardDatabase.MIGRATION_4_5)
+                        3 -> arrayOf(YardDatabase.MIGRATION_3_4, YardDatabase.MIGRATION_4_5)
+                        else -> arrayOf(YardDatabase.MIGRATION_4_5)
                     }
                 helper.runMigrationsAndValidate(name, to, true, *migrations).use { db ->
                     db.query(
@@ -78,7 +79,7 @@ class MigrationPathsTest {
                             if (from < 3 && to >= 3) assertEquals(2500L, c.getLong(2))
                             else assertTrue(c.isNull(2))
                         }
-                    if (to == 4) db.query("SELECT COUNT(*) FROM category_rules").use { c ->
+                    if (to >= 4) db.query("SELECT COUNT(*) FROM category_rules").use { c ->
                         assertTrue(c.moveToFirst())
                         assertEquals(0, c.getInt(0))
                     }
