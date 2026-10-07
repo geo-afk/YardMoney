@@ -72,7 +72,7 @@ internal fun QuickAddContent(
     }
     MoneyEntrySection("Other records") {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("INCOME" to "Income", "TRANSFER" to "Transfer", "scan" to "Scan receipt").forEach { (route, label) ->
+            listOf("paste" to "Paste alert text", "INCOME" to "Income", "TRANSFER" to "Transfer", "scan" to "Scan receipt").forEach { (route, label) ->
                 OutlinedButton(onClick = { onAction(route) }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
             }
         }

@@ -110,7 +110,8 @@ internal fun TransactionForm(
     }
         .getOrDefault(false)
     val canSave =
-        validAmount &&
+        kind in listOf("EXPENSE", "INCOME", "TRANSFER", "REFUND", "ADJUSTMENT") &&
+            validAmount &&
             runCatching { DateWindow.UpToToday.allows(LocalDate.parse(date), model.repo.today) }.getOrDefault(false) &&
             (kind !in listOf("EXPENSE", "REFUND") || category.isNotBlank()) &&
             account in accounts &&

@@ -1,6 +1,7 @@
 package jm.yardmoney
 
 import android.app.Activity
+import android.content.Intent
 import android.app.KeyguardManager
 import android.os.Bundle
 import android.view.WindowManager
@@ -51,6 +52,8 @@ class MainActivity : FragmentActivity() {
             locked = appearancePrefs().getBoolean(Prefs.LOCK, false)
             lockSession.initialized = true
         }
+        if (savedInstanceState?.getBoolean("captureConsumed", false) != true)
+            lockSession.stageCapture(intent)
         biometricPrompt = createBiometricPrompt()
         enableEdgeToEdge()
         // The isolated fictional demo allows design verification; real financial screens stay
@@ -62,8 +65,21 @@ class MainActivity : FragmentActivity() {
             // selected tab and scroll positions, so unlocking returns to where the person was.
             val screens = rememberSaveableStateHolder()
             if (locked) LockScreen(notice = lockSession.notice, onUnlock = ::unlockByRequest)
-            else screens.SaveableStateProvider("app") { YardApp() }
+            else screens.SaveableStateProvider("app") {
+                YardApp(pendingCapture = lockSession.pendingCapture, captureConsumed = lockSession::consumeCapture)
+            }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        lockSession.stageCapture(intent)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("captureConsumed", lockSession.pendingCapture == null)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onResume() {

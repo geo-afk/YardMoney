@@ -45,7 +45,10 @@ internal fun ReceiptCrop(model: AppModel, uri: Uri, close: () -> Unit, done: (Ur
                     }
                 }
         } catch (e: Exception) {
-            failure = e.message
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            failure = jm.yardmoney.userMessage(e)
+        } catch (e: OutOfMemoryError) {
+            failure = jm.yardmoney.userMessage(e)
         }
     }
     val owned = bitmap

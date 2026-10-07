@@ -1,6 +1,8 @@
 package jm.yardmoney.ui
 
 import android.net.Uri
+import android.content.Intent
+import jm.yardmoney.sharedCapture
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -32,7 +34,8 @@ import jm.yardmoney.data.*
 import jm.yardmoney.navigationPrefs
 
 @Composable
-fun YardApp(model: AppModel = viewModel()) {
+fun YardApp(model: AppModel = viewModel(), pendingCapture: Intent? = null,
+    captureConsumed: (Intent) -> Unit = {}) {
     val data by model.snapshot.collectAsStateWithLifecycle()
     val error by model.error.collectAsStateWithLifecycle()
     val busy by model.busy.collectAsStateWithLifecycle()
@@ -57,7 +60,7 @@ fun YardApp(model: AppModel = viewModel()) {
                             else DataUnavailable(model, message)
                         }
                     current.ledger.profile == null -> SetupPage(model, busy)
-                    else -> MainPages(model, current, busy)
+                    else -> MainPages(model, current, busy, pendingCapture, captureConsumed)
                 }
                 if (message != null && current != null)
                     AlertDialog(
@@ -85,6 +88,8 @@ private fun MainPages(
     model: AppModel,
     data: FinanceSnapshot,
     busy: Boolean,
+    pendingCapture: Intent?,
+    captureConsumed: (Intent) -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf("Home") }
     // Back from another tab returns to Home before leaving the app. Registered first, so the
@@ -95,6 +100,8 @@ private fun MainPages(
     var payCommitId by rememberSaveable { mutableStateOf<String?>(null) }
     var quickDraftValues by rememberSaveable { mutableStateOf<List<String>?>(null) }
     var quickAdd by rememberSaveable { mutableStateOf(false) }
+    var alertText by rememberSaveable { mutableStateOf("") }
+    var statementUri by rememberSaveable { mutableStateOf<String?>(null) }
     var txKind by rememberSaveable { mutableStateOf("EXPENSE") }
     var camera by remember { mutableStateOf(false) }
     var cropUri by rememberSaveable { mutableStateOf<String?>(null) }
@@ -114,6 +121,21 @@ private fun MainPages(
         prefs.edit { putString(Prefs.ACCOUNT_SCOPE, id) }
     }
     val today = model.repo.today
+    // New shares wait until the current editor is closed, preserving an unfinished record.
+    LaunchedEffect(pendingCapture, form, quickAdd, camera, cropUri, draftId, busy) {
+        if (pendingCapture != null && form == null && !quickAdd && !camera && cropUri == null && draftId == null && !busy) {
+            try {
+                val capture = sharedCapture(pendingCapture)
+                when (capture?.type) {
+                    "text" -> { alertText = capture.text.orEmpty(); form = "paste" }
+                    "image" -> cropUri = capture.uri.toString()
+                    "csv" -> { statementUri = capture.uri.toString(); form = "statementImport" }
+                }
+            } catch (e: Exception) {
+                model.error.value = jm.yardmoney.userMessage(e)
+            } finally { captureConsumed(pendingCapture) }
+        }
+    }
     // Transition content may retain a callback while a database snapshot changes.
     val latestData by rememberUpdatedState(data)
     val safe =
@@ -314,13 +336,21 @@ private fun MainPages(
             }, action = { action ->
                 quickAdd = false
                 quickDraftValues = null
-                if (action == "scan") form = "scan"
+                if (action == "paste") { alertText = ""; form = "paste" }
+                else if (action == "scan") form = "scan"
                 else {
                     txKind = action
                     payCommitId = null
                     form = "transaction"
                 }
             }, saveRule = ::saveMerchantRule)
+
+    if (form == "paste") AlertCaptureSheet(alertText, data, today, close = { form = null }) { kind, draft ->
+        quickDraftValues = draft.savedValues()
+        txKind = kind
+        payCommitId = null
+        form = "transaction"
+    }
 
     if (form == "scan")
         AlertDialog(
