@@ -26,6 +26,16 @@ internal fun MainForms(
     if (route == "missingRecord") MissingRecordNotice(close)
     key(form) {
         when {
+            route == "categoryRules" -> StagedEditSheet("Category rules", "", busy, false, close) {
+                CategoryRulesPage(data.categoryRules.map { it.suggestion() },
+                    edit = { setForm("editRule:$it") }, add = { setForm("categoryRule") })
+            }
+            route == "categoryRule" -> CategoryRuleEditor(model, data, null, busy) { setForm("categoryRules") }
+            route.startsWith("editRule:") -> {
+                val rule = data.categoryRules.find { it.id == id }
+                if (rule == null) MissingRecordNotice(close)
+                else CategoryRuleEditor(model, data, rule, busy) { setForm("categoryRules") }
+            }
             route == "account" ->
                 SimpleForm(
                     "Add account",

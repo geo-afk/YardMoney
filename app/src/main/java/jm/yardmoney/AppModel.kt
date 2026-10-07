@@ -62,6 +62,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     /** Personal details kept outside the database: saved shop items and the chosen account view. */
     fun clearPersonalPreferences() {
+        // Merchant rules are Room data, erased by clearAllTables()/resetAll(); no rule preferences.
         app.savedItemsPrefs().edit().clear().commit()
         app.navigationPrefs().edit().clear().commit()
     }

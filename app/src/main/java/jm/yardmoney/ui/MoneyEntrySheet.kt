@@ -365,6 +365,7 @@ internal fun MoneyEntrySheet(
     close: () -> Unit,
     dirty: Boolean = true,
     keyValue: String = "",
+    feedback: @Composable () -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     StagedEditSheet(
@@ -374,6 +375,7 @@ internal fun MoneyEntrySheet(
         dirty,
         close,
         actions = {
+            feedback()
             Button(
                 onClick = save,
                 enabled = !busy && canSave,

@@ -67,9 +67,23 @@ class FinanceRepository(private val db: YardDatabase) {
                 }
             }
 
+    private val categoryRules: Flow<List<CategoryRule>> = db.invalidationTracker
+        .createFlow("category_rules").conflate().map { dao.readCategoryRules() }
+
+    suspend fun saveCategoryRule(rule: CategoryRule) = db.withTransaction {
+        CategoryRuleMatcher.validate(rule.suggestion())
+        require(rule.accountId == null || dao.account(rule.accountId) != null) { "Choose a valid account." }
+        dao.put(rule.copy(pattern = rule.pattern.trim(), category = rule.category.trim()))
+    }
+
+    suspend fun deleteCategoryRule(id: String) { dao.deleteCategoryRule(id) }
+
+    suspend fun categorySuggestion(merchant: String, accountId: String?) =
+        CategoryRuleMatcher.match(merchant, accountId, dao.readCategoryRules().map { it.suggestion() })
+
     val snapshot: Flow<FinanceSnapshot> =
-        combine(ledgerSnapshot, shoppingState) { ledger: FinanceSnapshot, shopping: ShoppingState ->
-            ledger.copy(shopping = shopping)
+        combine(ledgerSnapshot, shoppingState, categoryRules) { ledger, shopping, rules ->
+            ledger.copy(shopping = shopping, categoryRules = rules)
         }
 
     suspend fun onboard(profile: Profile, openingMinor: Long) = db.withTransaction {
@@ -453,6 +467,7 @@ class FinanceRepository(private val db: YardDatabase) {
                 "Items, tax and discounts must match the total, or save a total-only expense."
             }
         }
+        val categoryRule = categorySuggestion(r.merchant, r.accountId)
         val transactionId =
             if (r.existingTransactionId != null) {
                 val existing =
@@ -469,8 +484,8 @@ class FinanceRepository(private val db: YardDatabase) {
                         r.totalMinor,
                         r.date,
                         r.merchant,
-                        "Groceries",
-                        "NEEDS",
+                        categoryRule?.category ?: "Groceries",
+                        categoryRule?.bucket ?: "NEEDS",
                         r.accountId,
                     )
                 )

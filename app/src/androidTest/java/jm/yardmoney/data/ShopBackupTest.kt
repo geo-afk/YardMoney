@@ -55,9 +55,13 @@ class ShopBackupTest {
                     "Brown",
                 )
             app.repository.saveShoppingList(list, listOf(item))
+            val accountId = app.repository.dao.readAccounts().first().account.id
+            val rule = CategoryRule("backup-rule", "Rice", "CONTAINS", "Groceries", "NEEDS", accountId, 1)
+            app.repository.saveCategoryRule(rule)
             val current = backup.export(password())
             backup.restore(current, password())
             assertEquals(item, app.repository.dao.readShoppingItems().single { it.id == item.id })
+            assertEquals(rule, app.repository.dao.readCategoryRules().single { it.id == rule.id })
             val clear = BackupCipher.decrypt(current, password())
             val json =
                 try {
@@ -65,7 +69,10 @@ class ShopBackupTest {
                 } finally {
                     clear.fill(0)
                 }
+            assertEquals(4, json.getInt("version"))
+            assertEquals(0, json.getJSONObject("images").length())
             json.put("version", 2)
+            json.remove("category_rules")
             val lists = json.getJSONArray("shopping_lists")
             for (i in 0 until lists.length()) lists.getJSONObject(i).remove("createdDate")
             val items = json.getJSONArray("shopping_items")
@@ -81,6 +88,7 @@ class ShopBackupTest {
                     legacyClear.fill(0)
                 }
             backup.restore(legacy, password())
+            assertTrue(app.repository.dao.readCategoryRules().isEmpty())
             val restored = app.repository.dao.readShoppingItems().single { it.id == item.id }
             assertNull(app.repository.dao.readLists().single { it.id == list.id }.createdDate)
             assertEquals("Other", restored.category)

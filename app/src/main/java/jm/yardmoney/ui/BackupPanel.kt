@@ -89,7 +89,7 @@ internal fun BackupPanel(model: AppModel, restoreOnly: Boolean = false) {
         }
     Text("Encrypted file backup", style = MaterialTheme.typography.titleLarge)
     Text(
-        "Save your records and receipt photos using a password you keep. A lost password cannot be recovered. Restore replaces the current ledger after validation."
+        "Save your records and receipt previews using a password you keep. Photos are not included or restored from older backups. A lost password cannot be recovered. Restore replaces the current ledger after validation."
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (!restoreOnly)
@@ -138,10 +138,12 @@ internal fun BackupPanel(model: AppModel, restoreOnly: Boolean = false) {
                         modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.small,
                     )
-                    if (mode == "Restore")
+                    if (mode == "Restore") {
+                        Text("Receipt photos from older backups are not restored. Their saved text and items remain available in receipt previews.")
                         Tick("Replace current data with this backup", acknowledged) {
                             acknowledged = it
                         }
+                    }
                     else Text("Use at least 12 characters and store this password safely.")
                 }
             },

@@ -16,7 +16,7 @@ class MigrationPathsTest {
     @Test
     fun eachUpgradePathPreservesLinkedFinancialAndReceiptRecords() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        for ((from, to) in listOf(1 to 2, 1 to 3, 2 to 3)) {
+        for ((from, to) in listOf(1 to 2, 1 to 3, 2 to 3, 1 to 4, 2 to 4, 3 to 4)) {
             val name = "quality-migration-$from-$to-${System.nanoTime()}"
             try {
                 helper.createDatabase(name, from).use { db ->
@@ -37,9 +37,9 @@ class MigrationPathsTest {
                     db.execSQL(
                         "INSERT INTO price_observations VALUES ('price','product','rice','Rice','1','kg',2500,2500,'Market','','','2026-10-01')"
                     )
-                    db.execSQL("INSERT INTO shopping_lists VALUES ('list','Weekly shop')")
+                    db.execSQL("INSERT INTO shopping_lists (id,name) VALUES ('list','Weekly shop')")
                     db.execSQL(
-                        "INSERT INTO shopping_items VALUES ('item','list','Rice','2','rice',NULL,1,1)"
+                        "INSERT INTO shopping_items (id,listId,name,quantity,productKey,manualPriceMinor,checked,optional) VALUES ('item','list','Rice','2','rice',NULL,1,1)"
                     )
                     val binding = if (from == 1) "" else ",NULL"
                     db.execSQL(
@@ -47,8 +47,11 @@ class MigrationPathsTest {
                     )
                 }
                 val migrations =
-                    if (from == 1) arrayOf(YardDatabase.MIGRATION_1_2, YardDatabase.MIGRATION_2_3)
-                    else arrayOf(YardDatabase.MIGRATION_2_3)
+                    when (from) {
+                        1 -> arrayOf(YardDatabase.MIGRATION_1_2, YardDatabase.MIGRATION_2_3, YardDatabase.MIGRATION_3_4)
+                        2 -> arrayOf(YardDatabase.MIGRATION_2_3, YardDatabase.MIGRATION_3_4)
+                        else -> arrayOf(YardDatabase.MIGRATION_3_4)
+                    }
                 helper.runMigrationsAndValidate(name, to, true, *migrations).use { db ->
                     db.query(
                             "SELECT openingMinor + (SELECT SUM(signedMinor) FROM entries WHERE accountId='cash') FROM accounts WHERE id='cash'"
@@ -70,9 +73,15 @@ class MigrationPathsTest {
                             assertTrue(c.moveToFirst())
                             assertEquals(1, c.getInt(0))
                             assertEquals(1, c.getInt(1))
-                            if (to == 3) assertEquals(2500L, c.getLong(2))
+                            // Only the v2-to-v3 upgrade snapshots the observed shopping price.
+                            // A v3 row with no manual price must stay unspecified in v4.
+                            if (from < 3 && to >= 3) assertEquals(2500L, c.getLong(2))
                             else assertTrue(c.isNull(2))
                         }
+                    if (to == 4) db.query("SELECT COUNT(*) FROM category_rules").use { c ->
+                        assertTrue(c.moveToFirst())
+                        assertEquals(0, c.getInt(0))
+                    }
                     db.query("PRAGMA foreign_key_check").use { assertFalse(it.moveToFirst()) }
                 }
             } finally {

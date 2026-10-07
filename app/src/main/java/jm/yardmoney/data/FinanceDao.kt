@@ -5,6 +5,14 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FinanceDao {
+    @Query("SELECT * FROM category_rules ORDER BY createdAt DESC, id")
+    suspend fun readCategoryRules(): List<CategoryRule>
+
+    @Upsert suspend fun put(rule: CategoryRule)
+
+    @Query("DELETE FROM category_rules WHERE id=:id")
+    suspend fun deleteCategoryRule(id: String)
+
     @Query("SELECT * FROM goal_contributions")
     suspend fun readContributions(): List<GoalContribution>
 

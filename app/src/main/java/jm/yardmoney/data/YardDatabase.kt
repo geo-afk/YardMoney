@@ -23,14 +23,22 @@ import androidx.room.RoomDatabase
             ShoppingItem::class,
             BillTemplate::class,
             CategoryLimit::class,
+            CategoryRule::class,
         ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class YardDatabase : RoomDatabase() {
     abstract fun finance(): FinanceDao
 
     companion object {
+        val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS category_rules (id TEXT NOT NULL, pattern TEXT NOT NULL, matchType TEXT NOT NULL, category TEXT NOT NULL, bucket TEXT NOT NULL, accountId TEXT, createdAt INTEGER NOT NULL, PRIMARY KEY(id), FOREIGN KEY(accountId) REFERENCES accounts(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_category_rules_accountId ON category_rules(accountId)")
+            }
+        }
+
         val MIGRATION_2_3 =
             object : androidx.room.migration.Migration(2, 3) {
                 override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {

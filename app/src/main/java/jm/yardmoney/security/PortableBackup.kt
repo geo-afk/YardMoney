@@ -1,7 +1,6 @@
 package jm.yardmoney.security
 
 import android.database.Cursor
-import android.util.Base64
 import androidx.room.withTransaction
 import java.time.LocalDate
 import jm.yardmoney.YardMoneyApplication
@@ -31,6 +30,7 @@ class PortableBackup(private val app: YardMoneyApplication) {
             "price_observations",
             "shopping_lists",
             "shopping_items",
+            "category_rules",
         )
 
     suspend fun export(password: CharArray): ByteArray =
@@ -45,7 +45,7 @@ class PortableBackup(private val app: YardMoneyApplication) {
         require(password.size >= 12) { "Use a backup password of at least 12 characters." }
         val root =
             app.database.withTransaction {
-                val json = JSONObject().put("version", 3)
+                val json = JSONObject().put("version", 4)
                 val images = JSONObject()
                 var used = 0L
                 tables.forEach { table ->
@@ -63,21 +63,8 @@ class PortableBackup(private val app: YardMoneyApplication) {
                                             Cursor.FIELD_TYPE_STRING -> cursor.getString(i)
                                             else -> error("Unsupported backup column")
                                         }
-                                    row.put(name, value)
-                                    if (
-                                        name == "imageRef" && value is String && !images.has(value)
-                                    ) {
-                                        val photo = app.storage.readReceipt(value)
-                                        used += ((photo.size.toLong() + 2) / 3) * 4
-                                        require(used <= 45_000_000) {
-                                            "Receipt images exceed the pilot backup limit."
-                                        }
-                                        images.put(
-                                            value,
-                                            Base64.encodeToString(photo, Base64.NO_WRAP),
-                                        )
-                                        photo.fill(0)
-                                    }
+                                    // Photos never enter new backups. Reviewed text/items power previews.
+                                    row.put(name, if (name == "imageRef") JSONObject.NULL else value)
                                 }
                                 used += row.toString().toByteArray(Charsets.UTF_8).size + 2
                                 require(used <= 45_000_000) {
@@ -124,20 +111,21 @@ class PortableBackup(private val app: YardMoneyApplication) {
             } finally {
                 clear.fill(0)
             }
-        require(root.getInt("version") in 1..3) { "Unsupported backup version." }
+        val version = root.getInt("version")
+        require(version in 1..4) { "Unsupported backup version." }
+        val expectedTables = if (version < 4) tables - "category_rules" else tables
         require(
-            root.keys().asSequence().toSet() == (tables + listOf("version", "images")).toSet()
+            root.keys().asSequence().toSet() == (expectedTables + listOf("version", "images")).toSet()
         ) {
             "Unexpected backup content."
         }
+        if (version < 4) root.put("category_rules", JSONArray())
         val images = root.getJSONObject("images")
-        val refs = mutableMapOf<String, String>()
         try {
             images.keys().forEach { ref ->
                 require(ReceiptNames.storedFile.matches(ref))
-                val data = Base64.decode(images.getString(ref), Base64.NO_WRAP)
-                refs[ref] = app.storage.saveReceipt(FinanceRepository.id(), data)
-                data.fill(0)
+                // Approved photo-free recovery: accept old backup records without saving photos.
+                require(images.get(ref) is String) { "Invalid legacy receipt image." }
             }
             app.database.withTransaction {
                 val sql = app.database.openHelper.writableDatabase
@@ -187,9 +175,10 @@ class PortableBackup(private val app: YardMoneyApplication) {
                                     } else {
                                         val value = row.get(name)
                                         require(value is String && value.length <= 300_000)
-                                        if (name == "imageRef")
-                                            refs[value] ?: error("Missing receipt image")
-                                        else value
+                                        if (name == "imageRef") {
+                                            require(images.has(value)) { "Missing legacy receipt image." }
+                                            null
+                                        } else value
                                     }
                                 }
                                 .toTypedArray<Any?>()
@@ -199,7 +188,17 @@ class PortableBackup(private val app: YardMoneyApplication) {
                         )
                     }
                 }
-                listOf("commitments", "bill_templates", "category_limits").forEach { table ->
+                sql.query("SELECT * FROM category_rules").use { c ->
+                    while (c.moveToNext()) {
+                        fun text(name: String) = c.getString(c.getColumnIndexOrThrow(name))
+                        val accountIndex = c.getColumnIndexOrThrow("accountId")
+                        CategoryRuleMatcher.validate(
+                            CategorySuggestion(text("id"), text("pattern"), text("matchType"),
+                                text("category"), text("bucket"), if (c.isNull(accountIndex)) null else c.getString(accountIndex),
+                                c.getLong(c.getColumnIndexOrThrow("createdAt"))))
+                    }
+                }
+                listOf("commitments", "bill_templates", "category_limits", "category_rules").forEach { table ->
                     sql.query(
                             "SELECT id FROM $table WHERE accountId IS NOT NULL AND accountId NOT IN (SELECT id FROM accounts)"
                         )
@@ -335,9 +334,8 @@ class PortableBackup(private val app: YardMoneyApplication) {
                     }
             }
         } catch (e: Exception) {
-            refs.values.forEach { runCatching { app.storage.deleteReceipt(it) } }
             throw e
         }
-        app.storage.removeUnusedReceiptFiles(refs.values.toSet())
+        app.storage.removeUnusedReceiptFiles(emptySet())
     }
 }

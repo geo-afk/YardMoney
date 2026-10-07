@@ -80,6 +80,13 @@ internal fun SettingsPage(model: AppModel, data: FinanceSnapshot, open: (String)
                 Text("Add account")
             }
         }
+        SettingsGroup("Category rules", "Merchant shortcuts for faster recording", Icons.Default.Category,
+            expanded == "Category rules", { toggle("Category rules") }) {
+            Text("Your choices are saved only on this device and included in encrypted backups.")
+            FilledTonalButton(onClick = { open("categoryRules") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text("Manage category rules")
+            }
+        }
         SettingsGroup(
             "Insights & search",
             "Spending, trends and saved records",

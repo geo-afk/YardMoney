@@ -99,15 +99,17 @@ class MoneyNavigationTest {
         compose.setContent {
             YardTheme {
                 if (visible)
-                    MoneyQuickAddSheet({ visible = false }) {
-                        action = it
-                        visible = false
+                    StagedEditSheet("Quick Add", "", false, false, { visible = false }) {
+                        QuickAddContent("", QuickAddDraft(), emptyList(), emptyList(), emptyList(), emptyList(),
+                            false, false, onLine = {}, onDraft = {}, onRepeat = { _, _ -> }, onSave = {},
+                            onEdit = { action = "EXPENSE"; visible = false },
+                            onAction = { action = it; visible = false })
                     }
             }
         }
         listOf(
                 "Income" to "INCOME",
-                "Expense" to "EXPENSE",
+                "More details" to "EXPENSE",
                 "Transfer" to "TRANSFER",
                 "Scan receipt" to "scan",
             )

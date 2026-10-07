@@ -93,6 +93,7 @@ private fun MainPages(
     var form by rememberSaveable { mutableStateOf<String?>(null) }
     var draftId by rememberSaveable { mutableStateOf<String?>(null) }
     var payCommitId by rememberSaveable { mutableStateOf<String?>(null) }
+    var quickDraftValues by rememberSaveable { mutableStateOf<List<String>?>(null) }
     var quickAdd by rememberSaveable { mutableStateOf(false) }
     var txKind by rememberSaveable { mutableStateOf("EXPENSE") }
     var camera by remember { mutableStateOf(false) }
@@ -259,12 +260,14 @@ private fun MainPages(
                                 payCommitId = null
                                 return
                             }
+                            quickDraftValues = null
                             txKind = if (commitment.kind == "SAVINGS") "TRANSFER" else "EXPENSE"
                             form = "transaction"
                         }
                         route == "transaction" -> {
                             payCommitId = null
                             txKind = "EXPENSE"
+                            quickDraftValues = null
                             form = route
                         }
                         else -> form = route
@@ -290,19 +293,34 @@ private fun MainPages(
         }
     }
 
+    fun saveMerchantRule(pattern: String, category: String, bucket: String, account: String?) {
+        model.act(successMessage = "Category rule saved") {
+            val existing = data.categoryRules.firstOrNull {
+                it.pattern.equals(pattern.trim(), true) && it.matchType == "EXACT" && it.accountId == account
+            }
+            model.repo.saveCategoryRule(CategoryRule(existing?.id ?: FinanceRepository.id(), pattern,
+                "EXACT", category, bucket, account, existing?.createdAt ?: System.currentTimeMillis()))
+        }
+    }
     if (quickAdd)
-        MoneyQuickAddSheet(
+        QuickAddSheet(model, view, data.categoryRules.map { it.suggestion() }, busy,
             dismiss = { quickAdd = false },
-            choose = { action ->
+            edit = { draft ->
+                quickDraftValues = draft.savedValues()
                 quickAdd = false
+                txKind = "EXPENSE"
+                payCommitId = null
+                form = "transaction"
+            }, action = { action ->
+                quickAdd = false
+                quickDraftValues = null
                 if (action == "scan") form = "scan"
                 else {
                     txKind = action
                     payCommitId = null
                     form = "transaction"
                 }
-            },
-        )
+            }, saveRule = ::saveMerchantRule)
 
     if (form == "scan")
         AlertDialog(
@@ -384,7 +402,11 @@ private fun MainPages(
                 payable,
                 busy,
                 initialAccountId = scope,
+                initialDraft = quickDraftValues?.let(QuickAddDraft::fromSaved),
+                rules = data.categoryRules.map { it.suggestion() },
+                saveRule = ::saveMerchantRule,
             ) {
+                quickDraftValues = null
                 form = null
                 payCommitId = null
             }

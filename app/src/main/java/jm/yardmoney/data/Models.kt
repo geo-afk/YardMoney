@@ -30,6 +30,7 @@ data class FinanceSnapshot(
     val contributions: List<GoalContribution> = emptyList(),
     val receiptItems: List<ReceiptItem> = emptyList(),
     val savingsAccountIds: Set<String>? = null,
+    val categoryRules: List<CategoryRule> = emptyList(),
 )
 
 data class TransactionInput(

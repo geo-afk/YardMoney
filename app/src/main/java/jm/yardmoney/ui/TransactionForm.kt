@@ -11,7 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import jm.yardmoney.AppModel
-import jm.yardmoney.core.Money
+import jm.yardmoney.core.*
+import kotlinx.coroutines.launch
 import jm.yardmoney.data.*
 
 @Composable
@@ -22,20 +23,23 @@ internal fun TransactionForm(
     commitment: Commitment?,
     busy: Boolean,
     initialAccountId: String? = null,
+    initialDraft: QuickAddDraft? = null,
+    rules: List<CategorySuggestion> = emptyList(),
+    saveRule: ((String, String, String, String?) -> Unit)? = null,
     close: () -> Unit,
 ) {
     val key = rememberSaveable { FinanceRepository.id() }
     var kind by rememberSaveable { mutableStateOf(initialKind) }
     val remaining =
         data.ledger.commitments.find { it.commitment.id == commitment?.id }?.remainingMinor
-    var amount by rememberSaveable { mutableStateOf(remaining?.let(Money::input) ?: "") }
-    var date by rememberSaveable { mutableStateOf(model.repo.today.toString()) }
-    var description by rememberSaveable { mutableStateOf(commitment?.name ?: "") }
-    var category by rememberSaveable { mutableStateOf("Other") }
-    var bucket by rememberSaveable { mutableStateOf("NEEDS") }
+    var amount by rememberSaveable { mutableStateOf(initialDraft?.amount ?: remaining?.let(Money::input) ?: "") }
+    var date by rememberSaveable { mutableStateOf(initialDraft?.date ?: model.repo.today.toString()) }
+    var description by rememberSaveable { mutableStateOf(initialDraft?.description ?: commitment?.name ?: "") }
+    var category by rememberSaveable { mutableStateOf(initialDraft?.category ?: "Other") }
+    var bucket by rememberSaveable { mutableStateOf(initialDraft?.bucket ?: "NEEDS") }
     var account by rememberSaveable {
         mutableStateOf(
-            (commitment?.accountId ?: initialAccountId)?.takeIf { id ->
+            initialDraft?.accountId ?: (commitment?.accountId ?: initialAccountId)?.takeIf { id ->
                 data.ledger.accounts.any { it.account.id == id }
             } ?: data.ledger.accounts.firstOrNull()?.account?.id.orEmpty()
         )
@@ -89,6 +93,17 @@ internal fun TransactionForm(
             .distinct()
             .map { IdentityOption(it, it) }
 
+    var categoryChosen by rememberSaveable { mutableStateOf(!initialDraft?.category.isNullOrBlank()) }
+    val snack = remember { SnackbarHostState() }
+    val uiScope = rememberCoroutineScope()
+    LaunchedEffect(description, account, rules, kind) {
+        if (!categoryChosen && kind == "EXPENSE" && commitment == null) {
+            CategoryRuleMatcher.match(description, account, rules)?.let {
+                category = it.category
+                bucket = it.bucket
+            }
+        }
+    }
     var splitExpanded by rememberSaveable { mutableStateOf(false) }
     val validAmount = runCatching {
         if (kind == "ADJUSTMENT") Money.parse(amount, true) != 0L else Money.positive(amount) > 0
@@ -96,11 +111,13 @@ internal fun TransactionForm(
         .getOrDefault(false)
     val canSave =
         validAmount &&
-            runCatching { LocalDate.parse(date) }.isSuccess &&
+            runCatching { DateWindow.UpToToday.allows(LocalDate.parse(date), model.repo.today) }.getOrDefault(false) &&
+            (kind !in listOf("EXPENSE", "REFUND") || category.isNotBlank()) &&
             account in accounts &&
             (kind != "TRANSFER" || destination in accounts && destination != account)
     MoneyEntrySheet(
         title = commitment?.name ?: "Record money",
+        feedback = { SnackbarHost(snack) },
         action =
             when (kind) {
                 "EXPENSE" -> "Save expense"
@@ -217,6 +234,14 @@ internal fun TransactionForm(
             if (kind == "EXPENSE" || kind == "REFUND") {
                 IdentityPicker("Category", category, categories, allowCustom = true) {
                     category = it
+                    categoryChosen = true
+                    val merchant = description.trim()
+                    val chosen = it
+                    if (saveRule != null && merchant.isNotBlank()) uiScope.launch {
+                        if (snack.showSnackbar("Always use $chosen for '$merchant'?", "Always use",
+                            duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed)
+                            saveRule(merchant, chosen, bucket, account.takeIf { it.isNotBlank() })
+                    }
                 }
                 Choice("Budget group", bucket, listOf("NEEDS", "WANTS", "SAVINGS")) { bucket = it }
             }

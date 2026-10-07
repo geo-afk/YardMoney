@@ -30,7 +30,7 @@ class YardMoneyApplication : Application() {
     private fun buildDatabase(): YardDatabase {
         System.loadLibrary("sqlcipher")
         return Room.databaseBuilder(this, YardDatabase::class.java, "yardmoney.db")
-            .addMigrations(YardDatabase.MIGRATION_1_2, YardDatabase.MIGRATION_2_3)
+            .addMigrations(YardDatabase.MIGRATION_1_2, YardDatabase.MIGRATION_2_3, YardDatabase.MIGRATION_3_4)
             .openHelperFactory(SupportOpenHelperFactory(storage.databasePassphrase()))
             .build()
     }
