@@ -221,7 +221,7 @@ private fun MainPages(
         },
         bottomBar = {
             if (!expanded)
-                MoneyNavigation(tab, { tab = it }, { quickAdd = true }, addEnabled = !busy)
+                MoneyNavigation(if (quickAdd) "Quick Add" else tab, { tab = it }, { quickAdd = true }, addEnabled = !busy)
         },
     ) { inset ->
         Row(Modifier.padding(inset)) {
@@ -337,12 +337,14 @@ private fun MainPages(
             }, action = { action ->
                 quickAdd = false
                 quickDraftValues = null
-                if (action == "paste") { alertText = ""; form = "paste" }
-                else if (action == "scan") form = "scan"
-                else {
-                    txKind = action
-                    payCommitId = null
-                    form = "transaction"
+                when (action) {
+                    QuickAddAction.PASTE -> { alertText = ""; form = "paste" }
+                    QuickAddAction.SCAN -> form = "scan"
+                    QuickAddAction.INCOME, QuickAddAction.TRANSFER -> {
+                        txKind = action.name
+                        payCommitId = null
+                        form = "transaction"
+                    }
                 }
             }, saveRule = ::saveMerchantRule)
 

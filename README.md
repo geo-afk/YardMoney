@@ -157,7 +157,7 @@ Enter the amount, account and date, then review optional details before saving. 
 
 ### Quick Add and category rules
 
-Tap the prominent **Add** action in the bottom navigation to open Quick Add. Type a smart line such as `taxi 600 cash yesterday` or `Hi-Lo 8,450 card yesterday`, using the name of an account you created. Account matching ignores letter case. Amounts can use commas, decimals, a currency prefix or a `k` abbreviation, such as `lunch 1.2k`.
+Tap the **Quick Add** item in the bottom navigation to open Quick Add. Its labeled icon uses the same size and spacing as the other navigation items. Preview chips open field-specific help; edit the fields below them, or choose **More details** to open the full expense form. Type a smart line such as `taxi 600 cash yesterday` or `Hi-Lo 8,450 card yesterday`, using the name of an account you created. Account matching ignores letter case. Amounts can use commas, decimals, a currency prefix or a `k` abbreviation, such as `lunch 1.2k`.
 
 The amount, category, account and date suggestions remain editable. Missing or ambiguous values show **Not specified**; choose them before saving. The parser understands today, yesterday, weekdays and day/month dates, and does not accept future transaction dates. Parsing never saves money automatically.
 

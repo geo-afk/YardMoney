@@ -9,3 +9,6 @@ internal data class QuickAddDraft(
         fun fromSaved(values: List<String>) = QuickAddDraft(values[0], values[1], values[2], values[3], values[4], values[5])
     }
 }
+
+// Routing is exhaustive: help and preview controls cannot fall through to a transaction.
+internal enum class QuickAddAction { INCOME, TRANSFER, SCAN, PASTE }

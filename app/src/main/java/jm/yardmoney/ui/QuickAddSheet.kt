@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun QuickAddSheet(
     model: AppModel, data: FinanceSnapshot, rules: List<CategorySuggestion>, busy: Boolean,
-    dismiss: () -> Unit, edit: (QuickAddDraft) -> Unit, action: (String) -> Unit,
+    dismiss: () -> Unit, edit: (QuickAddDraft) -> Unit, action: (QuickAddAction) -> Unit,
     saveRule: (String, String, String, String?) -> Unit,
 ) {
     var line by rememberSaveable { mutableStateOf("") }

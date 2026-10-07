@@ -34,7 +34,7 @@ class SharedCaptureNavigationTest {
             // Keep the monitored action/type stable when singleTop replaces the payload.
             val launch = Intent(context, MainActivity::class.java).setAction(Intent.ACTION_SEND).setType("text/plain")
             ActivityScenario.launch<MainActivity>(launch).use { scenario ->
-                compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("Add money or scan receipt").fetchSemanticsNodes().size == 1 }
+                compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("Quick Add").fetchSemanticsNodes().size == 1 }
                 scenario.onActivity { activity ->
                     ViewModelProvider(activity)[LockSession::class.java].apply { locked = true; autoPrompt = false; promptInFlight = true }
                 }

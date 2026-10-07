@@ -41,7 +41,7 @@ class MoneyNavigationTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun centerAddActionHasALargeTargetAndRespectsBusyState() {
+    fun quickAddHasAnEqualTargetAndRespectsBusyState() {
         var busy by mutableStateOf(false)
         var added = 0
         lateinit var inputMode: InputModeManager
@@ -53,7 +53,7 @@ class MoneyNavigationTest {
                 }
             }
         }
-        val add = compose.onNodeWithContentDescription("Add money or scan receipt")
+        val add = compose.onNodeWithContentDescription("Quick Add")
         add.assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performClick()
         assertEquals(1, added)
         // Buttons accept keyboard focus in keyboard mode, matching a connected keyboard.
@@ -70,9 +70,32 @@ class MoneyNavigationTest {
             compose.runOnIdle { inputMode.requestInputMode(InputMode.Touch) }
         }
         val bounds = add.getUnclippedBoundsInRoot()
-        assertEquals(180f, (bounds.left.value + bounds.right.value) / 2f, 1f)
+        val planBounds = compose.onNodeWithContentDescription("Plan").getUnclippedBoundsInRoot()
+        assertEquals((planBounds.right - planBounds.left).value, (bounds.right - bounds.left).value, .1f)
+        assertEquals((planBounds.bottom - planBounds.top).value, (bounds.bottom - bounds.top).value, .1f)
         compose.runOnIdle { busy = true }
         add.assertIsNotEnabled()
+    }
+
+    @Test
+    fun quickAddSelectionDoesNotChangeTheUnderlyingTab() {
+        var tab by mutableStateOf("Plan")
+        var open by mutableStateOf(false)
+        compose.setContent {
+            YardTheme { Box(Modifier.width(360.dp)) {
+                MoneyNavigation(if (open) "Quick Add" else tab, { tab = it }, { open = true })
+            } }
+        }
+        compose.onNodeWithText("Quick Add").performTouchInput { click() }
+        compose.onNodeWithContentDescription("Quick Add").assertIsSelected()
+        compose.onNodeWithContentDescription("Plan").assertIsNotSelected()
+        assertEquals("Plan", tab)
+        compose.runOnIdle { open = false }
+        compose.onNodeWithContentDescription("Quick Add").assertIsNotSelected()
+        compose.onNodeWithContentDescription("Plan").assertIsSelected()
+        compose.onNodeWithTag("Navigation Quick Add icon", useUnmergedTree = true).performTouchInput { click() }
+        compose.onNodeWithContentDescription("Quick Add").assertIsSelected()
+        assertEquals("Plan", tab)
     }
 
     @Test
@@ -83,12 +106,13 @@ class MoneyNavigationTest {
                 YardTheme { Box(Modifier.width(320.dp)) { MoneyNavigation("Plan", {}, {}) } }
             }
         }
-        listOf("Home", "Activity", "Plan", "Shop", "More", "Add money or scan receipt").forEach {
+        listOf("Home", "Activity", "Plan", "Shop", "More", "Quick Add").forEach {
             compose
                 .onNodeWithContentDescription(it)
                 .assertIsDisplayed()
                 .assertWidthIsAtLeast(48.dp)
                 .assertHeightIsAtLeast(48.dp)
+            compose.onNodeWithText(it, useUnmergedTree = true).assertIsDisplayed()
         }
     }
 
@@ -103,7 +127,7 @@ class MoneyNavigationTest {
                         QuickAddContent("", QuickAddDraft(), emptyList(), emptyList(), emptyList(), emptyList(),
                             false, false, onLine = {}, onDraft = {}, onRepeat = { _, _ -> }, onSave = {},
                             onEdit = { action = "EXPENSE"; visible = false },
-                            onAction = { action = it; visible = false })
+                            onAction = { action = it.name; visible = false })
                     }
             }
         }
@@ -111,7 +135,8 @@ class MoneyNavigationTest {
                 "Income" to "INCOME",
                 "More details" to "EXPENSE",
                 "Transfer" to "TRANSFER",
-                "Scan receipt" to "scan",
+                "Scan receipt" to "SCAN",
+                "Paste alert text" to "PASTE",
             )
             .forEach { (label, route) ->
                 compose.runOnIdle { visible = true }
