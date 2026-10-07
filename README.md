@@ -35,13 +35,15 @@ The current **0.4.2 local pilot** stores financial records on your device and wo
 | Currency | Jamaican dollars (JMD), displayed as J$ where applicable |
 | Android support | Android 8.0 / API 26 minimum; compile and target API 36 |
 | Accounts and connectivity | Local use without sign-in; optional identity and cloud backup remain planned |
-| Latest host verification | 120 unit tests passed on 6 October 2026 |
-| Previous device verification | 89 instrumentation tests passed on a Pixel 8 Pro on 4 October 2026; not rerun for the current changes |
-| Latest build checks | Debug APK assembled; signature and 16 KB ZIP alignment verified |
-| Android lint | Zero errors and 46 warnings on 6 October 2026 |
+| Latest host verification | 138 unit tests passed on 6 October 2026 |
+| Latest device verification | Full Pixel 8 Pro run: 105/106 passed; corrected test assertion and new CSV flow passed in focused reruns |
+| Latest build checks | Debug assembly, host tests, lint and instrumentation APK compilation passed; release/signature/alignment checks were not rerun for capture/import |
+| Android lint | Zero errors and 48 warnings on 6 October 2026 |
 | License | MIT; copyright 2026 Geovanni Stewart |
 
-The current-source checks were recorded on **6 October 2026**: debug assembly, core/app host tests and debug lint. Instrumentation APK compilation, device tests and optimized release assembly were not rerun for these changes; the 4 October device results describe an earlier source revision. These results do not establish behavior on every Android device or every real receipt. Camera usability, real-receipt accuracy, fresh-device recovery, background reminders and a broader accessibility/device matrix still need manual validation. See [the device checklist](docs/07-device-validation.md).
+The capture/import checks were recorded on **6 October 2026** using the isolated `jm.yardmoney.testhost` installation on a Pixel 8 Pro running Android 17. The full device run passed 105 of 106 tests; its remaining failure was an expense-split sign expectation in a new test. After correcting that assertion, the focused import suite passed all six tests, including CSV sharing, rotation, explicit import and undo. The latest full suite was not repeated after the final date-format picker correction. Optimized release assembly and APK signature/alignment checks were not rerun for these changes.
+
+Camera usability, real-receipt accuracy, fresh-device recovery, background reminders and a broader accessibility/device matrix still need manual validation. See [the device checklist](docs/07-device-validation.md).
 
 ## Who it is for
 
@@ -68,7 +70,10 @@ This pilot is a manual financial tracker. It does not connect to banks, move mon
 | Receipts | Capture or import images, adjust crop/perspective, run bundled OCR, review extracted items and reconcile totals |
 | Reports | Search local records, review merchant/category/monthly summaries, compare date periods and export CSV |
 | Appearance | Choose light, dark, AMOLED or system modes; dynamic colors or custom accents; corners, spacing and motion |
-| Security | Encrypted database and receipt files, optional device authentication, password-encrypted portable backups and local deletion |
+| Quick Add | Parse a smart line, edit suggested fields, reuse recent expenses and manage merchant category rules |
+| Share and paste | Review shared alert text, crop shared photos or paste alert text explicitly; app lock protects incoming content |
+| Statement import | Map CSV columns and dates, review rows, skip duplicates, import selected records and undo a batch |
+| Security | Encrypted database, saved receipt previews, optional device authentication, photo-free password-encrypted backups and local deletion |
 
 ### Interface details
 
@@ -84,7 +89,7 @@ The system authentication prompt opens when app authentication is required. If y
 
 Date pickers disable dates outside the range accepted by the relevant form. Exceeded category limits display **Over by** in the error color, section titles are marked as headings for TalkBack, and reminders use a dedicated status-bar icon. Receipt-photo processing handles memory exhaustion with a readable error, while reminder retries are capped.
 
-Shopping checkbox updates read shopping tables separately from the ledger, avoiding a full ledger reload for each tap. Recurring bill generation looks up existing occurrences once per bill series, and reports/category-limit totals are reused when their underlying data has not changed. These are implementation improvements; no before/after speed benchmark has been recorded.
+Shopping checkbox updates, category-rule edits and statement-mapping updates read their own tables separately from the ledger, avoiding a full ledger reload for those edits. Recurring bill generation looks up existing occurrences once per bill series, and reports/category-limit totals are reused when their underlying data has not changed. These are implementation improvements; no before/after speed benchmark has been recorded.
 
 ## Screenshots
 
@@ -102,7 +107,7 @@ Captured from YardMoney 0.4.2 Demo on a Pixel 8 Pro using fictional records and 
 
 You need a device running Android 8.0 or newer. This repository contains source code; generated APKs, local SDKs and signing keys are excluded from Git.
 
-For a development installation, follow [build and install from source](#build-and-install-from-source), or obtain a verified development APK from the maintainer. The [0.4.2 development prerelease](https://github.com/geo-afk/YardMoney/releases/tag/v0.4.2) includes an installable APK and checksum. Play Store distribution is not configured.
+For a development installation, follow [build and install from source](#build-and-install-from-source), or obtain a verified development APK from the maintainer. The [0.4.2 development prerelease](https://github.com/geo-afk/YardMoney/releases/tag/v0.4.2) includes an installable APK and checksum from an earlier source revision. Build the current source to try the newer capture and statement-import features; this README update does not publish a replacement APK. Play Store distribution is not configured.
 
 The debug build uses a development signing certificate. The optimized release build is unsigned until release signing is configured; it cannot be installed as a finished production release.
 
@@ -150,6 +155,38 @@ Use the plus action and choose the appropriate transaction:
 
 Enter the amount, account and date, then review optional details before saving. The grouped form scrolls while the Save action remains reachable. Transfers need different source and destination accounts.
 
+### Quick Add and category rules
+
+Tap the prominent **Add** action in the bottom navigation to open Quick Add. Type a smart line such as `taxi 600 cash yesterday` or `Hi-Lo 8,450 card yesterday`, using the name of an account you created. Account matching ignores letter case. Amounts can use commas, decimals, a currency prefix or a `k` abbreviation, such as `lunch 1.2k`.
+
+The amount, category, account and date suggestions remain editable. Missing or ambiguous values show **Not specified**; choose them before saving. The parser understands today, yesterday, weekdays and day/month dates, and does not accept future transaction dates. Parsing never saves money automatically.
+
+Up to six repeat chips suggest frequent/recent expense combinations from the last 60 days. Tap to prefill an expense or long-press to open detailed editing. Changing a category can offer an **Always use** snackbar action. Accept it to save a merchant rule; manage exact/contains rules and optional account bindings in **More → Category rules**. Rules apply to Quick Add, detailed expense entry, reviewed receipt confirmation, shared/pasted alerts and statement imports. A more specific matching rule takes priority.
+
+### Share or paste an alert
+
+From another app's Share menu, choose YardMoney for plain text, a receipt image or a CSV statement. When app lock is enabled, incoming content waits until you authenticate. An existing editor stays open before the new share is handled.
+
+Shared text opens a review sheet with amount, merchant, income/expense direction and date suggestions. Tap **Review record**, choose missing fields and confirm the transaction in the normal editor. Generic words such as purchase, payment, debited, received and credited help identify direction; conflicting directions or multiple amounts need your review.
+
+For clipboard capture, open **Quick Add → Paste alert text**, then tap **Paste alert text** in the review sheet. The app reads the clipboard only on that tap. Shared photos open the existing crop/OCR flow; CSV files open the statement importer. None of these entry points auto-save records.
+
+### Import a statement CSV
+
+1. Open **More → Backup & data → Import transactions**, or share a CSV file to YardMoney.
+2. Choose a UTF-8 CSV file. Commas, semicolons and tabs are detected; quoted commas/newlines, a UTF-8 BOM and CRLF line endings are supported. Limits are 20 MB and 20,000 data rows.
+3. Choose the target account and whether the first row contains column names. Map date and description, then either a signed amount column or separate debit and credit columns. Balance is optional.
+4. Choose the date format explicitly: `dd/MM/yyyy`, `MM/dd/yyyy` or `yyyy-MM-dd`. This resolves dates such as `01/02` without guessing.
+5. Tap **Preview rows** and review each include toggle. Invalid rows cannot be imported. Possible duplicates are skipped by default; enable **Allow selected duplicate rows** before deliberately selecting them.
+6. Confirm the selected rows. The importer shows progress and saves the batch atomically; a rejected write leaves no partial batch. Matching category rules apply to imported descriptions.
+7. Use **Undo import** on the result screen or under **Previous imports** to remove that batch. Remove linked refunds or receipts first if they prevent undo.
+
+Signed negative amounts are expenses and positive amounts are income. Debit/credit columns represent spending/receipts separately; grouped amounts and parentheses for negative signed amounts are supported. Duplicate comparison uses the account, date, signed amount and whitespace-normalized description. The account's column mapping is remembered. Importing the same file with the same account and mapping again adds no records; undo the batch before changing its row selection and reimporting.
+
+The raw statement file is not copied into app storage. Parsed rows stay in memory while reviewing, including through rotation and lock/unlock. Saved import records retain batch provenance so undo is possible.
+
+CSV import is separate from backup restoration. YardMoney's transaction export includes a type column and positive expense amounts; convert that export to signed amounts or debit/credit columns before using this importer. Use an encrypted portable backup to restore the complete app state.
+
 ### Bills, commitments and savings goals
 
 Add recurring bills and reserve money for upcoming obligations. Partial payments reduce the outstanding commitment as well as the relevant account balance. Review the remaining amount rather than treating a partially paid bill as settled.
@@ -181,7 +218,7 @@ Financial records are held locally. The app manifest explicitly removes the Inte
 | Protection | Implementation and practical limit |
 | --- | --- |
 | Ledger storage | Room backed by SQLCipher; database encryption key protected through Android Keystore |
-| Receipt images | Encrypted private storage, separate from the database |
+| Receipt capture | New scans use temporary image processing; reviewed text/items supply saved receipt previews; photos are excluded from new backups and legacy restores |
 | App access | Optional system biometric/device-credential authentication; prompt appears when authentication is required |
 | Screen content | Secure-window protection restricts ordinary screenshots and screen capture |
 | OS backup | Automatic app backup disabled; explicit data-extraction exclusions configured |
@@ -190,11 +227,13 @@ Financial records are held locally. The app manifest explicitly removes the Inte
 
 Portable backups use AES-GCM and PBKDF2-HMAC-SHA256 with 600,000 iterations and a fresh salt. The backup password must contain at least 12 characters. Keep both the backup file and its password somewhere you can recover them. The pilot has no online password-recovery service.
 
+New backups use **format 5**, including merchant category rules, import batches, provenance and account column mappings. Restoration accepts formats **1–5** and supplies empty metadata tables when an older format lacks them. Receipt photos are never included in new backups. Restoring a legacy backup keeps its financial/text records and receipt previews but does not restore original photos.
+
 Uninstalling the app, clearing its storage or losing the device can remove local records and keys. Create a portable backup before destructive actions. Test restoration with fictional records before depending on it for recovery. Do not treat a database file copied from private storage or a CSV export as a substitute for the supported encrypted backup.
 
 ### Delete local records and recover unreadable data
 
-**Delete local records** clears database records and stored receipt files, saved shop items, the selected account scope and any in-progress shopping list. Appearance preferences are separate from personal financial records. Save a portable backup first if you want to retain the data.
+**Delete local records** clears database records, including category rules and statement batches/mappings, plus stored receipt files, saved shop items, the selected account scope and any in-progress shopping list. Appearance preferences are separate from personal financial records. Save a portable backup first if you want to retain the data.
 
 If YardMoney cannot open its database or encryption key, try **Retry** first. **Start over** requires typing `DELETE` and permanently removes the local database, its wrapped encryption key, stored receipt images and saved personal preferences. The app can then start empty and restore a portable backup through its normal data controls. Backups you saved elsewhere are not deleted; starting over does not recover unreadable records by itself.
 
@@ -341,9 +380,11 @@ Run `./scripts/install-demo.ps1` to build and install **YardMoney Demo**, a sepa
 
 ### Evidence and reports
 
-On **6 October 2026**, `:app:assembleDebug :core:test :app:testDebugUnitTest :app:lintDebug` completed successfully against the current source. All **120 host tests passed**, with no failures, errors or skipped tests; lint reported **0 errors and 46 warnings**. The generated debug APK passed signing-certificate verification and 16 KB ZIP alignment checks. The newer host tests cover readable error messages, date windows, spreadsheet-safe CSV values and differential report/category-limit calculations.
+On **6 October 2026**, `:app:assembleDebug :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest` passed for the capture/import source. All **138 host tests passed** (79 core and 59 app tests); lint reported **0 errors and 48 warnings**. Kotlin compilation runs as part of the build.
 
-The previous full run on **4 October 2026** passed 104 host tests and 89 device tests on a Pixel 8 Pro, with no skipped device tests. Device tests and release assembly have not been rerun for the current hardening and refactoring changes. Receipt regression coverage checks ambiguous uniform images as well as a recognizable paper quadrilateral. UI tests cover forms, calendar behavior, category selection and appearance; repository tests use isolated databases for ledger invariants.
+`:app:connectedDebugAndroidTest -PdeviceTestInstall=true` ran the full suite on a Pixel 8 Pro running Android 17: **105/106 passed**. The failing test expected a negative expense-category split, while the ledger stores positive expense splits and negative account movements. After correcting that expectation and preserving date-format labels in the picker, the focused repository/import UI suite passed **6/6**. That rerun included a new end-to-end CSV-share test covering account/date selection, rotation, explicit import, balance changes and undo. Separate focused capture tests also passed for review, URI validation and retaining an unsaved shared alert behind the lock.
+
+The tests cover an actual-export golden version-3 backup fixture, legacy backup formats, version-5 import metadata round trips, supported database upgrade paths, duplicate handling, atomic rollback and undo. Parser cases cover invalid/ambiguous alerts, quoted CSV fields, date formats, byte/row limits and malformed input. The latest full device suite was not rerun after the final picker correction; release assembly, APK signature/alignment and real-receipt/manual checks were not repeated in this pass.
 
 | Report | Generated location |
 | --- | --- |
@@ -383,11 +424,14 @@ The Android source is organized into smaller files:
 - `ShopEditor`, `ShopItemRow` and `ShopDetail` separate shopping editing, rows and detail views.
 - `PlanCalculations`, `FinancialSummary` and `CategoryLimitUsage` hold calculations used by charts and reports.
 - `Models`, `ReceiptModels`, `UiModels`, `UiPreferences` and `ShopModels` hold data and UI types.
+- `QuickAddParser`, `CategoryRuleMatcher`, `AlertTextParser` and `StatementCsv` provide Android-free capture/import logic with JVM tests.
+- `QuickAddSheet`, `AlertCaptureSheet` and `StatementImportSheet` wire those suggestions to editable Compose forms; `StatementImportViewModel` retains in-memory review state.
+- `CategoryRuleModels` and `StatementImportModels` define the new Room data. Rule/import metadata reads have separate conflated invalidation flows combined into `FinanceSnapshot`.
 - `Prefs` centralizes preference names, `JamaicaTime` supplies the Jamaica-time clock, and `UserMessages` maps failures to readable text.
 
-Application ID: `jm.yardmoney`. Current Room schema version: 3. The root project and repository are named `YardMoney`; changing a folder name does not change the Android application ID.
+Application ID: `jm.yardmoney`. Current Room schema version: 5; portable backup format: 5, with restore support for formats 1–5. The root project and repository are named `YardMoney`; changing a folder name does not change the Android application ID.
 
-Navigation uses saveable Compose root destinations and dialogs. A `SaveableStateHolder` retains forms, the selected tab and supported scroll state across app lock/unlock. Back from another root tab returns to Home first, and the manifest opts in to predictive back. The implementation does not currently use Navigation Compose or Navigation 3. The five root destinations are Home, Activity, Plan, Shop and More.
+Navigation uses saveable Compose root destinations and dialogs. A `SaveableStateHolder` retains forms, the selected tab and supported scroll state across app lock/unlock. Back from another root tab returns to Home first, and the manifest opts in to predictive back. The implementation does not currently use Navigation Compose or Navigation 3. The five root destinations are Home, Activity, Plan, Shop and More. `MainActivity` uses `singleTop` and handles supported shares through `onNewIntent`; `LockSession` holds incoming intents until the unlocked app can process them.
 
 ## Financial and receipt rules
 
@@ -403,6 +447,9 @@ These invariants matter when contributing changes:
 - Preserve receipt review and reconciliation before ledger posting; maintain duplicate acknowledgement and existing-expense linking.
 - Treat price observations as historical evidence with branch/date/unit context, not guaranteed current retail prices.
 - Validate imported backup data before committing restored records and retain authenticated-encryption checks.
+- Keep share/paste/CSV capture behind app lock and require review before posting.
+- Preserve import provenance, retry-safe submission keys, account movements and splits together in one transaction.
+- Keep scanned photos temporary and exclude photos from portable backups and legacy restoration.
 
 Changes to these rules need meaningful financial/recovery tests. Schema changes require a reviewed migration and updated exported schemas; this pilot does not authorize destructive migrations to discard user records.
 
@@ -452,7 +499,9 @@ The current focus is validating and refining the local pilot. Public-release wor
 - Privacy notice, Data safety disclosures, support process and private vulnerability reporting.
 - Review of operating costs and the final product name/trademark availability.
 
-There are no committed release dates in this repository. Bank integrations, advanced debt/card accounting, gross-payroll estimates and multiple currencies are outside the current pilot scope.
+The current standout-features pass has completed baseline verification and items **1–3**: Quick Add, share/paste capture and statement import. Items **4–19 remain pending**, including shortcuts/widgets, safe-to-spend explanations, pardner/payslip/seasonal/debt tools, price-memory improvements, backup health, privacy masking/timeouts, calendar/recap, expanded layouts, record editing/filters, notification improvements and shopping-list sharing. Foreign-currency support is an optional stretch item.
+
+There are no committed release dates in this repository. Bank linking, remote accounts/cloud sync, ads/analytics, SMS or notification scraping, AI calls and investment tracking are outside this implementation pass.
 
 ## Documentation and references
 
